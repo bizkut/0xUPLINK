@@ -1,0 +1,350 @@
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111111;
+  --bg-tertiary: #1a1a1a;
+  --border-color: #2a2a2a;
+  --text-primary: #00ff9d;
+  --text-secondary: #00cc7a;
+  --text-dim: #006644;
+  --text-white: #e0e0e0;
+  --accent-amber: #ffb000;
+  --accent-red: #ff3333;
+  --accent-blue: #00aaff;
+  --accent-purple: #aa55ff;
+  --glow-green: 0 0 10px rgba(0, 255, 157, 0.5);
+  --glow-amber: 0 0 10px rgba(255, 176, 0, 0.5);
+  --glow-red: 0 0 10px rgba(255, 51, 51, 0.5);
+  --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 8px;
+  gap: 8px;
+}
+
+/* Status Bar */
+#status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+}
+
+#status-bar .label {
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+
+#status-bar .value {
+  color: var(--text-primary);
+}
+
+#status-bar .value.online {
+  color: var(--text-primary);
+  text-shadow: var(--glow-green);
+}
+
+#status-bar .separator {
+  color: var(--border-color);
+  margin: 0 12px;
+}
+
+.heat-low { color: var(--text-primary) !important; }
+.heat-med { color: var(--accent-amber) !important; text-shadow: var(--glow-amber); }
+.heat-high { color: var(--accent-red) !important; text-shadow: var(--glow-red); animation: pulse 1s infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+#clock {
+  color: var(--text-dim);
+  letter-spacing: 2px;
+}
+
+/* Main Content */
+#main-content {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* Panel Common Styles */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.panel-title {
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+/* Node Panel */
+#node-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  min-width: 400px;
+}
+
+#node-map {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#node-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#node-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.target-info {
+  color: var(--accent-amber);
+  font-size: 11px;
+}
+
+/* Trace Bar */
+#trace-bar-container {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
+  gap: 12px;
+}
+
+.trace-label {
+  color: var(--text-dim);
+  font-size: 11px;
+  min-width: 50px;
+}
+
+#trace-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+#trace-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--text-primary), var(--accent-amber), var(--accent-red));
+  transition: width 0.3s ease;
+}
+
+#trace-percent {
+  color: var(--text-primary);
+  font-size: 12px;
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Terminal Panel */
+#terminal-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  min-width: 500px;
+}
+
+#connection-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#connection-indicator .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: var(--glow-green);
+}
+
+#connection-indicator.connected .dot {
+  background: var(--accent-amber);
+  box-shadow: var(--glow-amber);
+}
+
+#connection-status {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+#terminal-output {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#terminal-output::-webkit-scrollbar {
+  width: 6px;
+}
+
+#terminal-output::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+#terminal-output::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+}
+
+#terminal-output::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+.terminal-line {
+  margin-bottom: 4px;
+}
+
+.terminal-line.command {
+  color: var(--text-white);
+}
+
+.terminal-line.command::before {
+  content: '> ';
+  color: var(--text-dim);
+}
+
+.terminal-line.success {
+  color: var(--text-primary);
+}
+
+.terminal-line.error {
+  color: var(--accent-red);
+}
+
+.terminal-line.warning {
+  color: var(--accent-amber);
+}
+
+.terminal-line.info {
+  color: var(--accent-blue);
+}
+
+.terminal-line.system {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Terminal Input */
+#terminal-input-line {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
+  position: relative;
+}
+
+.prompt {
+  color: var(--text-secondary);
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+#terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-white);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  caret-color: var(--text-primary);
+}
+
+#terminal-input::placeholder {
+  color: var(--text-dim);
+}
+
+/* Autocomplete */
+#autocomplete-dropdown {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+#autocomplete-dropdown.visible {
+  display: block;
+}
+
+.autocomplete-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+  background: var(--bg-tertiary);
+}
+
+.autocomplete-item .cmd {
+  color: var(--text-primary);
+}
+
+.autocomplete-item .desc {
+  color: var(--text-dim);
+  font-size: 11px;
+}

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UPLINK // Netrunner</title>
+  <link rel="stylesheet" href="css/terminal.css">
+  <link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Top Status Bar -->
+    <header id="status-bar">
+      <div class="status-left">
+        <span class="label">GATEWAY:</span>
+        <span id="gateway-status" class="value online">ONLINE</span>
+        <span class="separator">│</span>
+        <span class="label">IP:</span>
+        <span id="player-ip" class="value">192.168.1.???</span>
+      </div>
+      <div class="status-center">
+        <span id="clock"></span>
+      </div>
+      <div class="status-right">
+        <span class="label">CR:</span>
+        <span id="credits" class="value">1000</span>
+        <span class="separator">│</span>
+        <span class="label">REP:</span>
+        <span id="reputation" class="value">0</span>
+        <span class="separator">│</span>
+        <span class="label">HEAT:</span>
+        <span id="heat" class="value heat-low">0%</span>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main id="main-content">
+      <!-- Left Panel: Node Map -->
+      <section id="node-panel">
+        <div class="panel-header">
+          <span class="panel-title">// NETWORK MAP</span>
+          <span id="target-name" class="target-info">NO CONNECTION</span>
+        </div>
+        <div id="node-map">
+          <canvas id="node-canvas"></canvas>
+          <div id="node-overlay"></div>
+        </div>
+        <div id="trace-bar-container">
+          <span class="trace-label">TRACE:</span>
+          <div id="trace-bar">
+            <div id="trace-fill"></div>
+          </div>
+          <span id="trace-percent">0%</span>
+        </div>
+      </section>
+
+      <!-- Right Panel: Terminal -->
+      <section id="terminal-panel">
+        <div class="panel-header">
+          <span class="panel-title">// TERMINAL</span>
+          <div id="connection-indicator">
+            <span class="dot"></span>
+            <span id="connection-status">LOCAL</span>
+          </div>
+        </div>
+        <div id="terminal-output"></div>
+        <div id="terminal-input-line">
+          <span class="prompt">root@uplink:~$</span>
+          <input type="text" id="terminal-input" autocomplete="off" spellcheck="false">
+          <div id="autocomplete-dropdown"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Action Bar -->
+    <footer id="action-bar">
+      <div class="action-group">
+        <button class="action-btn" data-cmd="scan" data-hotkey="1">
+          <span class="hotkey">[1]</span> SCAN
+        </button>
+        <button class="action-btn" data-cmd="connect" data-hotkey="2">
+          <span class="hotkey">[2]</span> CONNECT
+        </button>
+        <button class="action-btn" data-cmd="breach" data-hotkey="3">
+          <span class="hotkey">[3]</span> BREACH
+        </button>
+        <button class="action-btn" data-cmd="download" data-hotkey="4">
+          <span class="hotkey">[4]</span> DOWNLOAD
+        </button>
+        <button class="action-btn" data-cmd="crack" data-hotkey="5">
+          <span class="hotkey">[5]</span> CRACK
+        </button>
+      </div>
+      <div class="action-group">
+        <button class="action-btn warning" data-cmd="abort" data-hotkey="ESC">
+          <span class="hotkey">[ESC]</span> ABORT
+        </button>
+        <button class="action-btn" data-cmd="cloak" data-hotkey="C">
+          <span class="hotkey">[C]</span> CLOAK
+        </button>
+        <button class="action-btn" data-cmd="clean" data-hotkey="X">
+          <span class="hotkey">[X]</span> CLEAN LOGS
+        </button>
+      </div>
+      <div class="hardware-status">
+        <div class="hw-item">
+          <span class="hw-label">CPU</span>
+          <span id="cpu-usage">2/4</span>
+        </div>
+        <div class="hw-item">
+          <span class="hw-label">RAM</span>
+          <span id="ram-usage">128/256MB</span>
+        </div>
+        <div class="hw-item">
+          <span class="hw-label">BW</span>
+          <span id="bandwidth">100Mb/s</span>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="hidden">
+      <div id="modal-content"></div>
+    </div>
+
+    <!-- Alert Overlay (for incoming hacks) -->
+    <div id="alert-overlay" class="hidden">
+      <div class="alert-content">
+        <div class="alert-icon">⚠</div>
+        <div class="alert-title">INTRUSION DETECTED</div>
+        <div id="alert-message"></div>
+        <div class="alert-actions">
+          <button id="alert-respond">RESPOND</button>
+          <button id="alert-dismiss">DISMISS</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
