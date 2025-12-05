@@ -2,6 +2,7 @@ import { Terminal } from './terminal.js';
 import { Game } from './game.js';
 import { NodeMap } from './nodeMap.js';
 import { UI } from './ui.js';
+import { SECTORS, SECURITY_ZONES, SOVEREIGNTY_STRUCTURES } from '../../shared/constants.js';
 
 class App {
   constructor() {
@@ -9,6 +10,11 @@ class App {
     this.game = new Game();
     this.nodeMap = new NodeMap();
     this.ui = new UI();
+    
+    // Universe state (received from server)
+    this.location = null;
+    this.currentNetwork = null;
+    this.resources = {};
     
     this.init();
   }
@@ -49,8 +55,51 @@ class App {
     this.terminal.print('');
     this.terminal.print('Welcome to UPLINK // Netrunner', 'info');
     this.terminal.print('Type "help" for available commands.', 'system');
-    this.terminal.print('Type "tutorial" to begin the training simulation.', 'system');
+    this.terminal.print('Type "location" to see where you are in the Grid.', 'system');
     this.terminal.print('');
+    
+    // Show initial location if available
+    if (this.currentNetwork) {
+      this.terminal.print(`Current Location: ${this.currentNetwork.zoneName} - ${this.currentNetwork.ip}`, 'system');
+    }
+  }
+  
+  // Called when we receive initial state from server
+  onInitialState(data) {
+    this.location = data.location;
+    this.currentNetwork = data.currentNetwork;
+    this.resources = data.resources || {};
+    
+    // Update UI
+    this.updateLocationDisplay();
+  }
+  
+  updateLocationDisplay() {
+    if (!this.currentNetwork) return;
+    
+    const zoneIndicator = document.getElementById('zone-indicator');
+    const sectorName = document.getElementById('sector-name');
+    const networkIp = document.getElementById('network-ip');
+    const securityLevel = document.getElementById('security-level');
+    
+    // Update zone indicator
+    const zone = this.currentNetwork.zone;
+    zoneIndicator.textContent = zone.toUpperCase();
+    zoneIndicator.className = `zone-${zone}`;
+    
+    // Update sector name
+    const sector = SECTORS[this.location?.sectorId?.toUpperCase()] || { name: 'Unknown Sector' };
+    sectorName.textContent = sector.name || this.location?.sectorId || 'Unknown';
+    
+    // Update network IP
+    networkIp.textContent = this.currentNetwork.ip;
+    
+    // Update security level with color
+    const sec = this.currentNetwork.security;
+    securityLevel.textContent = sec.toFixed(1);
+    securityLevel.className = 'security-badge ' + (
+      sec >= 0.5 ? 'sec-high' : sec >= 0.1 ? 'sec-med' : 'sec-low'
+    );
   }
 
   async handleCommand(input) {
@@ -92,6 +141,9 @@ class App {
       case 'download':
         await this.cmdDownload(args);
         break;
+      case 'harvest':
+        await this.cmdHarvest();
+        break;
       case 'abort':
         this.cmdAbort();
         break;
@@ -116,6 +168,34 @@ class App {
       case 'tutorial':
         await this.cmdTutorial();
         break;
+      case 'location':
+        this.cmdLocation();
+        break;
+      case 'explore':
+        await this.cmdExplore(args);
+        break;
+      case 'sectors':
+        this.cmdSectors();
+        break;
+      case 'navigate':
+      case 'jump':
+        await this.cmdNavigate(args);
+        break;
+      case 'resources':
+        this.cmdResources();
+        break;
+      case 'crew':
+        await this.cmdCrew(args);
+        break;
+      case 'sov':
+        await this.cmdSov(args);
+        break;
+      case 'siege':
+        await this.cmdSiege(args);
+        break;
+      case 'map':
+        this.cmdMap();
+        break;
       default:
         this.terminal.print(`Unknown command: ${cmd}`, 'error');
         this.terminal.print('Type "help" for available commands.', 'system');
@@ -136,16 +216,22 @@ class App {
 
     this.terminal.print('=== AVAILABLE COMMANDS ===', 'info');
     this.terminal.print('');
-    this.terminal.print('NAVIGATION:', 'warning');
+    this.terminal.print('UNIVERSE:', 'warning');
+    this.terminal.print('  location       - Show current location in Grid', 'system');
+    this.terminal.print('  sectors        - List all sectors', 'system');
+    this.terminal.print('  explore [sec]  - Explore cluster or sector', 'system');
+    this.terminal.print('  navigate <id>  - Navigate to network', 'system');
+    this.terminal.print('  map            - Show cluster network map', 'system');
+    this.terminal.print('');
+    this.terminal.print('HACKING:', 'warning');
     this.terminal.print('  scan <ip>      - Scan target server', 'system');
     this.terminal.print('  connect <ip>   - Connect to server', 'system');
     this.terminal.print('  disconnect     - Clean disconnect', 'system');
     this.terminal.print('  move <node>    - Move to node', 'system');
-    this.terminal.print('');
-    this.terminal.print('HACKING:', 'warning');
     this.terminal.print('  breach         - Breach current node ICE', 'system');
     this.terminal.print('  crack          - Crack password', 'system');
     this.terminal.print('  download <f>   - Download file', 'system');
+    this.terminal.print('  harvest        - Harvest resources', 'system');
     this.terminal.print('  clean          - Clean logs', 'system');
     this.terminal.print('');
     this.terminal.print('DEFENSE:', 'warning');
@@ -154,6 +240,10 @@ class App {
     this.terminal.print('');
     this.terminal.print('INFO:', 'warning');
     this.terminal.print('  status         - Current status', 'system');
+    this.terminal.print('  resources      - View harvested resources', 'system');
+    this.terminal.print('  crew           - Manage your organization', 'system');
+    this.terminal.print('  sov            - Sovereignty management', 'system');
+    this.terminal.print('  siege          - Attack structures', 'system');
     this.terminal.print('  hardware       - View hardware', 'system');
     this.terminal.print('  software       - View programs', 'system');
     this.terminal.print('  contracts      - View jobs', 'system');
@@ -288,6 +378,11 @@ class App {
     if (result.node.files && result.node.files.length > 0) {
       this.terminal.print(`Files detected: ${result.node.files.length}`, 'info');
     }
+
+    if (result.node.resources && result.node.resources.length > 0) {
+      this.terminal.print(`Resources detected: ${result.node.resources.length} types`, 'success');
+      this.terminal.print('Use "harvest" to collect.', 'system');
+    }
   }
 
   async cmdBreach() {
@@ -416,6 +511,30 @@ class App {
     this.terminal.print(`Downloaded: ${filename} (${this.formatSize(file.size)})`, 'success');
     if (result.credits) {
       this.terminal.print(`Value: ${result.credits} CR`, 'success');
+    }
+  }
+
+  async cmdHarvest() {
+    if (!this.game.state.connection.active) {
+      this.terminal.print('Not connected to any server.', 'error');
+      return;
+    }
+
+    this.terminal.print('Harvesting resources...', 'system');
+    
+    const result = await this.game.harvestResources();
+    
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    if (result.success) {
+      result.harvested.forEach(res => {
+        this.terminal.print(`Harvested: ${res.amount}x ${res.type.replace('_', ' ').toUpperCase()}`, 'success');
+      });
+      // Update local resources display
+      this.resources = this.game.state.player.resources;
     }
   }
 
@@ -646,6 +765,286 @@ class App {
 
   delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // === NEW UNIVERSE COMMANDS ===
+  
+  cmdLocation() {
+    if (!this.currentNetwork) {
+      this.terminal.print('Location data not available.', 'error');
+      return;
+    }
+    
+    const net = this.currentNetwork;
+    const loc = this.location;
+    const sector = SECTORS[loc?.sectorId?.toUpperCase()];
+    const zone = SECURITY_ZONES[net.zone?.toUpperCase()];
+    
+    this.terminal.print('=== CURRENT LOCATION ===', 'info');
+    this.terminal.print('');
+    this.terminal.print(`Zone: ${net.zoneName || net.zone}`, net.zone === 'clearnet' ? 'success' : net.zone === 'greynet' ? 'warning' : 'error');
+    this.terminal.print(`Sector: ${sector?.name || loc?.sectorId || 'Unknown'}`, 'system');
+    this.terminal.print(`Cluster: ${loc?.clusterId || 'Unknown'}`, 'system');
+    this.terminal.print(`Network: ${net.ip}`, 'system');
+    this.terminal.print(`Security Level: ${net.security?.toFixed(1) || '?'}`, 'system');
+    this.terminal.print(`Owner: ${net.owner || 'Unknown'}`, 'system');
+    this.terminal.print('');
+    
+    if (zone) {
+      this.terminal.print('Zone Rules:', 'warning');
+      this.terminal.print(`  Player Attack: ${zone.rules.canAttackPlayers ? 'ALLOWED' : 'FORBIDDEN'}`, 'system');
+      this.terminal.print(`  Sentinel Response: ${zone.rules.sentinelResponse ? `${zone.rules.sentinelDelay}s` : 'NONE'}`, 'system');
+      this.terminal.print(`  Reward Multiplier: ${zone.rules.rewardMultiplier}x`, 'system');
+    }
+  }
+  
+  cmdSectors() {
+    this.terminal.print('=== THE GRID - SECTORS ===', 'info');
+    this.terminal.print('');
+    
+    for (const [key, sector] of Object.entries(SECTORS)) {
+      const zoneColor = sector.zone === 'CLEARNET' ? 'success' : sector.zone === 'GREYNET' ? 'warning' : 'error';
+      const current = this.location?.sectorId?.toUpperCase() === key ? ' [CURRENT]' : '';
+      
+      this.terminal.print(`${sector.name}${current}`, zoneColor);
+      this.terminal.print(`  Zone: ${sector.zone} | Security: ${sector.securityRange[0].toFixed(1)} to ${sector.securityRange[1].toFixed(1)}`, 'system');
+      this.terminal.print(`  ${sector.description}`, 'dim');
+      this.terminal.print('');
+    }
+    
+    this.terminal.print('Use "explore <sector_name>" to view clusters.', 'system');
+  }
+  
+  async cmdExplore(args) {
+    if (args.length > 0) {
+      // Explore specific sector
+      const sectorName = args.join('_').toLowerCase();
+      this.terminal.print(`Exploring sector: ${sectorName}...`, 'system');
+      // TODO: Send EXPLORE message to server
+      this.terminal.print('Sector exploration coming soon.', 'warning');
+      return;
+    }
+    
+    // Explore current cluster
+    this.terminal.print('=== CLUSTER NETWORKS ===', 'info');
+    this.terminal.print(`Cluster: ${this.location?.clusterId || 'Unknown'}`, 'system');
+    this.terminal.print('');
+    
+    // For now, show placeholder - this would come from server
+    this.terminal.print('Network exploration requires server connection.', 'warning');
+    this.terminal.print('Use "navigate <network_id>" to move between networks.', 'system');
+  }
+  
+  async cmdNavigate(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: navigate <network_id>', 'error');
+      this.terminal.print('Use "explore" to see available networks.', 'system');
+      return;
+    }
+    
+    const targetId = args[0];
+    this.terminal.print(`Plotting route to ${targetId}...`, 'system');
+    
+    // TODO: Send NAVIGATE message to server
+    this.terminal.print('Network navigation requires server connection.', 'warning');
+  }
+  
+  cmdResources() {
+    this.terminal.print('=== RESOURCES ===', 'info');
+    this.terminal.print('');
+    
+    const resources = this.resources || this.game.state?.player?.resources || {};
+    
+    const resourceNames = {
+      data_packets: 'Data Packets',
+      bandwidth_tokens: 'Bandwidth',
+      encryption_keys: 'Enc. Keys',
+      access_tokens: 'Access Tokens',
+      zero_days: 'Zero-Days',
+      quantum_cores: 'Quantum Cores',
+    };
+    
+    let hasResources = false;
+    for (const [key, amount] of Object.entries(resources)) {
+      if (amount > 0) {
+        hasResources = true;
+        const name = resourceNames[key] || key;
+        this.terminal.print(`  ${name.padEnd(16)} ${amount}`, amount > 0 ? 'success' : 'system');
+      }
+    }
+    
+    if (!hasResources) {
+      this.terminal.print('No resources harvested yet.', 'system');
+      this.terminal.print('Hack into networks and use "harvest" on resource nodes.', 'system');
+    }
+  }
+
+  async cmdCrew(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: crew <action> [args]', 'error');
+      this.terminal.print('Actions:', 'system');
+      this.terminal.print('  create <name>  - Create a new crew (1000 CR)', 'system');
+      this.terminal.print('  info           - View current crew info', 'system');
+      this.terminal.print('  leave          - Leave current crew', 'system');
+      return;
+    }
+
+    const action = args[0].toLowerCase();
+
+    switch (action) {
+      case 'create':
+        if (args.length < 2) {
+          this.terminal.print('Usage: crew create <name>', 'error');
+          return;
+        }
+        const name = args.slice(1).join(' ');
+        this.terminal.print(`Creating crew "${name}"...`, 'system');
+        
+        const createResult = await this.game.createCrew(name);
+        if (createResult.error) {
+          this.terminal.print(createResult.error, 'error');
+        } else {
+          this.terminal.print(`Crew "${name}" created successfully.`, 'success');
+        }
+        break;
+
+      case 'info':
+        const infoResult = await this.game.getCrewInfo();
+        if (infoResult.error) {
+          this.terminal.print(infoResult.error, 'error');
+          return;
+        }
+        
+        const crew = infoResult.info;
+        this.terminal.print(`=== ${crew.name} ===`, 'info');
+        this.terminal.print(`Type: ${crew.type}`, 'system');
+        this.terminal.print(`Leader ID: ${crew.leader}`, 'system');
+        this.terminal.print(`Treasury: ${crew.treasury} CR`, 'success');
+        this.terminal.print('');
+        this.terminal.print('Members:', 'warning');
+        crew.members.forEach(m => {
+          this.terminal.print(`  ${m.name} [${m.role}]`, 'system');
+        });
+        break;
+
+      case 'leave':
+        this.terminal.print('Leaving crew...', 'system');
+        const leaveResult = await this.game.leaveCrew();
+        if (leaveResult.error) {
+          this.terminal.print(leaveResult.error, 'error');
+        } else {
+          this.terminal.print('You have left the organization.', 'success');
+        }
+        break;
+
+      default:
+        this.terminal.print(`Unknown crew action: ${action}`, 'error');
+    }
+  }
+  
+import { SOVEREIGNTY_STRUCTURES } from '../../shared/constants.js';
+
+  async cmdSov(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: sov <action> [args]', 'error');
+      this.terminal.print('Actions:', 'system');
+      this.terminal.print('  status         - View local sovereignty status', 'system');
+      this.terminal.print('  list           - List available structures', 'system');
+      this.terminal.print('  deploy <type>  - Deploy a structure', 'system');
+      return;
+    }
+
+    const action = args[0].toLowerCase();
+
+    switch (action) {
+      case 'status':
+        const status = await this.game.getSovereigntyStatus();
+        if (status.error) {
+          this.terminal.print(status.error, 'error');
+          return;
+        }
+        this.terminal.print(`=== SOVEREIGNTY STATUS: ${status.network} ===`, 'info');
+        this.terminal.print(`Zone: ${status.zone.toUpperCase()}`, 'system');
+        this.terminal.print(`Sovereignty: ${status.sovereignty}`, status.sovereignty === 'UNCLAIMED' ? 'system' : 'warning');
+        this.terminal.print('');
+        this.terminal.print('Structures:', 'warning');
+        if (status.structures.length === 0) {
+          this.terminal.print('  No structures deployed.', 'system');
+        } else {
+          status.structures.forEach(s => {
+            this.terminal.print(`  ${s.name} [${s.status}] - HP: ${s.health}`, 'success');
+          });
+        }
+        break;
+
+      case 'list':
+        this.terminal.print('=== AVAILABLE STRUCTURES ===', 'info');
+        Object.entries(SOVEREIGNTY_STRUCTURES).forEach(([key, s]) => {
+          this.terminal.print(`${s.name} (${key})`, 'warning');
+          this.terminal.print(`  Cost: ${s.deployCost} CR`, 'system');
+          this.terminal.print(`  Zone: ${s.requiresZone || 'Any'}`, 'system');
+          this.terminal.print(`  Org: ${s.requiresOrg.toUpperCase()}`, 'system');
+          this.terminal.print(`  ${s.description}`, 'dim');
+          this.terminal.print('');
+        });
+        break;
+
+      case 'deploy':
+        if (args.length < 2) {
+          this.terminal.print('Usage: sov deploy <type>', 'error');
+          return;
+        }
+        const type = args[1].toUpperCase();
+        this.terminal.print(`Initiating deployment: ${type}...`, 'system');
+        
+        const result = await this.game.deployStructure(type);
+        if (result.error) {
+          this.terminal.print(result.error, 'error');
+        } else {
+          this.terminal.print('Structure deployed successfully.', 'success');
+          this.terminal.print(`Online: ${result.structure.name}`, 'success');
+        }
+        break;
+
+      default:
+        this.terminal.print(`Unknown sovereignty action: ${action}`, 'error');
+    }
+  }
+
+  async cmdSiege(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: siege <structure_id>', 'error');
+      return;
+    }
+
+    const structureId = args[0];
+    this.terminal.print(`Initiating siege on ${structureId}...`, 'warning');
+    
+    const result = await this.game.siegeStructure(structureId);
+    
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print('SIEGE LINK ESTABLISHED', 'warning');
+    this.terminal.print(`Target: ${result.structure.name}`, 'system');
+    this.terminal.print(`Time to Reinforce: ${result.duration}s`, 'warning');
+    this.terminal.print('Maintain connection to progress hack.', 'system');
+    this.terminal.print('WARNING: Defenders have been alerted.', 'error');
+  }
+
+  cmdMap() {
+    if (!this.location) {
+      this.terminal.print('Map data not available.', 'error');
+      return;
+    }
+    
+    this.terminal.print('=== CLUSTER MAP ===', 'info');
+    this.terminal.print(`Cluster: ${this.location.clusterId}`, 'system');
+    this.terminal.print('');
+    this.terminal.print('Visual map requires server data.', 'warning');
+    this.terminal.print('Use "explore" to list networks in cluster.', 'system');
   }
 }
 

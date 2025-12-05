@@ -1,15 +1,20 @@
 services:
   game-server:
+    container_name: uplink-server
     build: .
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
+    volumes:
+      - ./client:/app/client
+      - ./server:/app/server
+      - ./shared:/app/shared
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/status"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 5s

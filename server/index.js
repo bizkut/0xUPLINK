@@ -4,6 +4,15 @@ import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { 
+  generateUniverse, 
+  findNetworkByIP, 
+  getNetworksByZone,
+  getStartingLocation,
+  findRoute,
+  getSecurityZone 
+} from '../shared/universe.js';
+import { SECURITY_ZONES, SECTORS, FACTIONS } from '../shared/constants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -15,7 +24,8 @@ const wss = new WebSocketServer({ server });
 // Game state
 const gameState = {
   players: new Map(),
-  servers: new Map(),
+  servers: new Map(), // Legacy - for player servers
+  universe: null, // The persistent world
   contracts: [],
   factions: {
     syndicate: { members: [], treasury: 0 },
@@ -23,6 +33,7 @@ const gameState = {
     ironwall: { members: [], treasury: 0 },
     chaos: { members: [], treasury: 0 },
   },
+  organizations: new Map(), // Player-created orgs
 };
 
 // Serve static files
@@ -34,8 +45,32 @@ app.get('/api/status', (req, res) => {
   res.json({
     players: gameState.players.size,
     servers: gameState.servers.size,
+    networks: gameState.universe?.totalNetworks || 0,
+    sectors: Object.keys(gameState.universe?.sectors || {}).length,
     uptime: process.uptime(),
   });
+});
+
+app.get('/api/universe/sectors', (req, res) => {
+  if (!gameState.universe) {
+    return res.status(503).json({ error: 'Universe not initialized' });
+  }
+  res.json(gameState.universe.sectors);
+});
+
+app.get('/api/universe/networks/:zone', (req, res) => {
+  if (!gameState.universe) {
+    return res.status(503).json({ error: 'Universe not initialized' });
+  }
+  const networks = getNetworksByZone(gameState.universe, req.params.zone);
+  res.json(networks.map(n => ({
+    id: n.id,
+    ip: n.ip,
+    owner: n.owner,
+    security: n.security,
+    zone: n.zone,
+    zoneName: n.zoneName,
+  })));
 });
 
 // WebSocket handling
@@ -43,6 +78,13 @@ wss.on('connection', (ws) => {
   const playerId = uuidv4();
   
   console.log(`Player connected: ${playerId}`);
+
+  // Get starting location in the universe
+  const startingNetwork = getStartingLocation(gameState.universe);
+  const startingSector = Object.values(gameState.universe.sectors)
+    .find(s => s.clusters.some(c => 
+      gameState.universe.clusters[c]?.networks.includes(startingNetwork.id)
+    ));
 
   // Initialize player
   const player = {
@@ -55,12 +97,27 @@ wss.on('connection', (ws) => {
     faction: null,
     online: true,
     server: generatePlayerServer(playerId),
+    location: {
+      networkId: startingNetwork.id,
+      networkIp: startingNetwork.ip,
+      clusterId: startingNetwork.clusterId,
+      sectorId: startingSector?.id || 'commercial_ring',
+      zone: startingNetwork.zone,
+    },
+    resources: {
+      data_packets: 0,
+      bandwidth_tokens: 0,
+      encryption_keys: 0,
+      access_tokens: 0,
+      zero_days: 0,
+      quantum_cores: 0,
+    },
   };
 
   gameState.players.set(playerId, player);
   gameState.servers.set(player.ip, player.server);
 
-  // Send initial state
+  // Send initial state with universe info
   ws.send(JSON.stringify({
     type: 'INIT',
     payload: {
@@ -68,6 +125,21 @@ wss.on('connection', (ws) => {
       ip: player.ip,
       credits: player.credits,
       server: player.server,
+      location: player.location,
+      resources: player.resources,
+      currentNetwork: {
+        id: startingNetwork.id,
+        ip: startingNetwork.ip,
+        owner: startingNetwork.owner,
+        security: startingNetwork.security,
+        zone: startingNetwork.zone,
+        zoneName: startingNetwork.zoneName,
+        zoneColor: startingNetwork.zoneColor,
+      },
+      universe: {
+        sectors: Object.keys(gameState.universe.sectors),
+        totalNetworks: gameState.universe.totalNetworks,
+      },
     },
   }));
 
@@ -112,13 +184,139 @@ function handleMessage(player, message) {
     case 'JOIN_FACTION':
       handleJoinFaction(player, payload);
       break;
+    case 'NAVIGATE':
+      handleNavigate(player, payload);
+      break;
+    case 'EXPLORE':
+      handleExplore(player, payload);
+      break;
+    case 'HARVEST':
+      handleHarvest(player, payload);
+      break;
+    case 'CREW_ACTION':
+      handleCrewAction(player, payload);
+      break;
+    case 'DEPLOY_STRUCTURE':
+      handleDeployStructure(player, payload);
+      break;
+    case 'SIEGE_START':
+      handleSiegeStart(player, payload);
+      break;
     default:
       console.log('Unknown message type:', type);
   }
 }
 
+function handleSiegeStart(player, { structureId, networkId }) {
+  console.log(`Player ${player.id} started siege on ${structureId} at ${networkId}`);
+  // Broadcast to defenders would go here
+}
+
+function handleDeployStructure(player, { type, networkId }) {
+  // In a real implementation, we would:
+  // 1. Validate player organization (must be officer+)
+  // 2. Validate location (must be in DarkNet or allowed zone)
+  // 3. Validate treasury/credits
+  // 4. Update universe state
+  
+  // For now, we'll just acknowledge the deployment
+  // The client handles the credit deduction and local state update for the prototype
+  
+  // Find the network in the universe
+  const network = gameState.universe.networks[networkId];
+  if (network) {
+    if (!network.structures) {
+      network.structures = [];
+    }
+    network.structures.push({
+      id: `${type}_${Date.now()}`,
+      type: type,
+      ownerId: player.id,
+      ownerOrg: player.organization
+    });
+  }
+  
+  console.log(`Player ${player.id} deployed ${type} on ${networkId}`);
+}
+
+function handleCrewAction(player, { action, name }) {
+  switch (action) {
+    case 'create':
+      if (player.organization) {
+        player.ws.send(JSON.stringify({
+          type: 'CREW_RESULT',
+          payload: { error: 'Already in an organization' }
+        }));
+        return;
+      }
+      if (player.credits < 1000) {
+        player.ws.send(JSON.stringify({
+          type: 'CREW_RESULT',
+          payload: { error: 'Insufficient credits (1000 CR required)' }
+        }));
+        return;
+      }
+      
+      player.credits -= 1000;
+      const crewId = `crew_${Date.now()}`;
+      const crew = {
+        id: crewId,
+        name: name,
+        type: 'CREW',
+        leader: player.id,
+        members: [{ id: player.id, name: `Player_${player.id.substr(0,6)}`, role: 'LEADER' }],
+        treasury: 0
+      };
+      
+      gameState.organizations.set(crewId, crew);
+      player.organization = crewId;
+      
+      player.ws.send(JSON.stringify({
+        type: 'CREW_RESULT',
+        payload: { success: true, crew }
+      }));
+      break;
+      
+    case 'info':
+      if (!player.organization) {
+        player.ws.send(JSON.stringify({
+          type: 'CREW_RESULT',
+          payload: { error: 'Not in an organization' }
+        }));
+        return;
+      }
+      
+      const org = gameState.organizations.get(player.organization);
+      player.ws.send(JSON.stringify({
+        type: 'CREW_RESULT',
+        payload: { success: true, crew: org }
+      }));
+      break;
+      
+    case 'leave':
+      if (!player.organization) {
+         player.ws.send(JSON.stringify({
+          type: 'CREW_RESULT',
+          payload: { error: 'Not in an organization' }
+        }));
+        return;
+      }
+      
+      const currentOrg = gameState.organizations.get(player.organization);
+      // Simple leave logic
+      currentOrg.members = currentOrg.members.filter(m => m.id !== player.id);
+      player.organization = null;
+      
+      player.ws.send(JSON.stringify({
+        type: 'CREW_RESULT',
+        payload: { success: true, left: true }
+      }));
+      break;
+  }
+}
+
 function handleScan(player, { targetIp }) {
-  const targetServer = gameState.servers.get(targetIp);
+  const targetServer = findTarget(targetIp);
   
   if (!targetServer) {
     player.ws.send(JSON.stringify({
@@ -143,7 +341,7 @@ function handleScan(player, { targetIp }) {
 }
 
 function handleConnect(player, { targetIp }) {
-  const targetServer = gameState.servers.get(targetIp);
+  const targetServer = findTarget(targetIp);
   
   if (!targetServer) {
     player.ws.send(JSON.stringify({
@@ -176,7 +374,7 @@ function handleConnect(player, { targetIp }) {
 }
 
 function handleHack(player, { action, nodeId, targetIp }) {
-  const targetServer = gameState.servers.get(targetIp);
+  const targetServer = findTarget(targetIp);
   if (!targetServer) return;
 
   // Process hack action and update server state
@@ -221,6 +419,185 @@ function handleJoinFaction(player, { factionId }) {
   player.ws.send(JSON.stringify({
     type: 'FACTION_JOINED',
     payload: { factionId },
+  }));
+}
+
+function handleNavigate(player, { targetNetworkId }) {
+  const targetNetwork = gameState.universe.networks[targetNetworkId];
+  
+  if (!targetNetwork) {
+    player.ws.send(JSON.stringify({
+      type: 'NAVIGATE_RESULT',
+      payload: { error: 'Network not found' },
+    }));
+    return;
+  }
+
+  // Find route from current location
+  const route = findRoute(gameState.universe, player.location.networkId, targetNetworkId);
+  
+  if (!route) {
+    player.ws.send(JSON.stringify({
+      type: 'NAVIGATE_RESULT',
+      payload: { error: 'No route to target network' },
+    }));
+    return;
+  }
+
+  // Update player location
+  const cluster = gameState.universe.clusters[targetNetwork.clusterId];
+  const sector = Object.values(gameState.universe.sectors)
+    .find(s => s.clusters.includes(targetNetwork.clusterId));
+
+  player.location = {
+    networkId: targetNetwork.id,
+    networkIp: targetNetwork.ip,
+    clusterId: targetNetwork.clusterId,
+    sectorId: sector?.id || player.location.sectorId,
+    zone: targetNetwork.zone,
+  };
+
+  player.ws.send(JSON.stringify({
+    type: 'NAVIGATE_RESULT',
+    payload: {
+      success: true,
+      route: route,
+      jumps: route.length - 1,
+      location: player.location,
+      currentNetwork: {
+        id: targetNetwork.id,
+        ip: targetNetwork.ip,
+        owner: targetNetwork.owner,
+        security: targetNetwork.security,
+        zone: targetNetwork.zone,
+        zoneName: targetNetwork.zoneName,
+        zoneColor: targetNetwork.zoneColor,
+        connections: targetNetwork.connections,
+      },
+    },
+  }));
+}
+
+function handleExplore(player, { clusterId, sectorId }) {
+  let networks = [];
+  
+  if (clusterId) {
+    const cluster = gameState.universe.clusters[clusterId];
+    if (cluster) {
+      networks = cluster.networks.map(nId => {
+        const n = gameState.universe.networks[nId];
+        return {
+          id: n.id,
+          ip: n.ip,
+          owner: n.owner,
+          security: n.security,
+          zone: n.zone,
+          zoneName: n.zoneName,
+          connections: n.connections.length,
+        };
+      });
+    }
+  } else if (sectorId) {
+    const sector = gameState.universe.sectors[sectorId.toUpperCase()];
+    if (sector) {
+      player.ws.send(JSON.stringify({
+        type: 'EXPLORE_RESULT',
+        payload: {
+          type: 'sector',
+          sector: {
+            id: sector.id,
+            name: sector.name,
+            description: sector.description,
+            zone: sector.zone,
+            securityRange: sector.securityRange,
+            clusterCount: sector.clusters.length,
+            clusters: sector.clusters.map(cId => ({
+              id: cId,
+              name: gameState.universe.clusters[cId]?.name,
+              networkCount: gameState.universe.clusters[cId]?.networks.length,
+            })),
+          },
+        },
+      }));
+      return;
+    }
+  } else {
+    // Explore current cluster
+    const cluster = gameState.universe.clusters[player.location.clusterId];
+    if (cluster) {
+      networks = cluster.networks.map(nId => {
+        const n = gameState.universe.networks[nId];
+        return {
+          id: n.id,
+          ip: n.ip,
+          owner: n.owner,
+          security: n.security,
+          zone: n.zone,
+          zoneName: n.zoneName,
+          connections: n.connections.length,
+          isCurrent: n.id === player.location.networkId,
+        };
+      });
+    }
+  }
+
+  player.ws.send(JSON.stringify({
+    type: 'EXPLORE_RESULT',
+    payload: {
+      type: 'cluster',
+      clusterId: clusterId || player.location.clusterId,
+      networks,
+    },
+  }));
+}
+
+function handleHarvest(player, { nodeId }) {
+  // Get current network from universe
+  const network = gameState.universe.networks[player.location.networkId];
+  if (!network) {
+    player.ws.send(JSON.stringify({
+      type: 'HARVEST_RESULT',
+      payload: { error: 'Invalid location' },
+    }));
+    return;
+  }
+
+  const node = network.nodes.find(n => n.id === nodeId);
+  if (!node) {
+    player.ws.send(JSON.stringify({
+      type: 'HARVEST_RESULT',
+      payload: { error: 'Node not found' },
+    }));
+    return;
+  }
+
+  if (!node.resources || node.resources.length === 0) {
+    player.ws.send(JSON.stringify({
+      type: 'HARVEST_RESULT',
+      payload: { error: 'No resources to harvest' },
+    }));
+    return;
+  }
+
+  // Harvest resources
+  const harvested = [];
+  for (const resource of node.resources) {
+    if (player.resources[resource.type] !== undefined) {
+      player.resources[resource.type] += resource.amount;
+      harvested.push({ type: resource.type, amount: resource.amount });
+    }
+  }
+
+  // Clear resources from node (they respawn over time - TODO)
+  node.resources = [];
+
+  player.ws.send(JSON.stringify({
+    type: 'HARVEST_RESULT',
+    payload: {
+      success: true,
+      harvested,
+      resources: player.resources,
+    },
   }));
 }
 
@@ -271,6 +648,27 @@ function generatePlayerServer(ownerId) {
 function isPlayerOnline(playerId) {
   const player = gameState.players.get(playerId);
   return player?.online || false;
+}
+
+function findTarget(ip) {
+  // Check legacy/player servers first
+  let target = gameState.servers.get(ip);
+  
+  // If not found, check universe networks
+  if (!target && gameState.universe) {
+    const network = findNetworkByIP(gameState.universe, ip);
+    if (network) {
+      target = network;
+      // Map security rating if missing (legacy client compatibility)
+      if (!target.securityRating) {
+        if (target.security >= 0.7) target.securityRating = 'HIGH';
+        else if (target.security >= 0.4) target.securityRating = 'MEDIUM';
+        else target.securityRating = 'LOW';
+      }
+    }
+  }
+  
+  return target;
 }
 
 // Generate some NPC servers
@@ -351,18 +749,42 @@ function generateNPCNodes(count, security) {
   return nodes.slice(0, Math.max(count, 4));
 }
 
+// Initialize universe
+function initializeUniverse() {
+  console.log('Generating universe...');
+  const startTime = Date.now();
+  
+  gameState.universe = generateUniverse();
+  
+  const elapsed = Date.now() - startTime;
+  console.log(`Universe generated in ${elapsed}ms`);
+  console.log(`  Sectors: ${Object.keys(gameState.universe.sectors).length}`);
+  console.log(`  Clusters: ${Object.keys(gameState.universe.clusters).length}`);
+  console.log(`  Networks: ${gameState.universe.totalNetworks}`);
+  
+  // Log zone distribution
+  const zoneCount = { clearnet: 0, greynet: 0, darknet: 0 };
+  for (const network of Object.values(gameState.universe.networks)) {
+    zoneCount[network.zone]++;
+  }
+  console.log(`  ClearNet: ${zoneCount.clearnet} | GreyNet: ${zoneCount.greynet} | DarkNet: ${zoneCount.darknet}`);
+}
+
 // Initialize
-generateNPCServers();
+initializeUniverse();
+generateNPCServers(); // Legacy NPC servers for backwards compatibility
 
 // Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`
-╔══════════════════════════════════════════╗
-║     UPLINK // Netrunner Server v0.1      ║
-║                                          ║
-║     Running on port ${PORT}                  ║
-║     http://localhost:${PORT}                 ║
-╚══════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════╗
+║           0xUPLINK // Netrunner Server v0.2              ║
+║                                                          ║
+║     Running on port ${PORT}                                  ║
+║     http://localhost:${PORT}                                 ║
+║                                                          ║
+║     Universe: ${gameState.universe.totalNetworks} networks across ${Object.keys(gameState.universe.sectors).length} sectors       ║
+╚══════════════════════════════════════════════════════════╝
   `);
 });

@@ -1,4 +1,4 @@
-import { HARDWARE_TIERS, ICE_TYPES, SOFTWARE_TYPES, NODE_TYPES, GAME_CONFIG, COMMANDS } from '../../shared/constants.js';
+import { HARDWARE_TIERS, ICE_TYPES, SOFTWARE_TYPES, NODE_TYPES, GAME_CONFIG, COMMANDS, RESOURCES, SOVEREIGNTY_STRUCTURES, ORGANIZATION_TYPES } from '../../shared/constants.js';
 
 export class Game {
   constructor() {
@@ -10,6 +10,7 @@ export class Game {
         reputation: GAME_CONFIG.STARTING_REPUTATION,
         heat: 0,
         faction: null,
+        organization: null, // { id, name, role }
         hardware: {
           tier: 0,
           ...HARDWARE_TIERS[0],
@@ -19,6 +20,14 @@ export class Game {
         },
         software: [],
         files: [],
+        resources: {
+          data_packets: 0,
+          bandwidth_tokens: 0,
+          encryption_keys: 0,
+          access_tokens: 0,
+          zero_days: 0,
+          quantum_cores: 0,
+        },
       },
       connection: {
         active: false,
@@ -334,6 +343,35 @@ export class Game {
     return { success: true, credits };
   }
 
+  async harvestResources() {
+    const current = this.getCurrentNode();
+    if (!current) return { error: 'Not connected.' };
+
+    if (!current.resources || current.resources.length === 0) {
+      return { error: 'No resources to harvest.' };
+    }
+
+    // Simulate harvest time
+    await this.delay(1000);
+
+    // Harvest all resources
+    const harvested = [];
+    current.resources.forEach(res => {
+      if (this.state.player.resources[res.type] !== undefined) {
+        this.state.player.resources[res.type] += res.amount;
+        harvested.push(res);
+      }
+    });
+
+    // Clear resources
+    current.resources = [];
+    
+    // Increase trace slightly
+    this.state.connection.trace += 5;
+
+    return { success: true, harvested };
+  }
+
   async cleanLogs() {
     const logCleaner = this.state.player.software.find(s => s.id === 'log_cleaner');
     if (!logCleaner) {
@@ -410,6 +448,161 @@ export class Game {
     return available;
   }
 
+  // === Organization Management (Mock/Client-Side) ===
+
+  async createCrew(name) {
+    if (this.state.player.organization) {
+      return { error: 'You are already in an organization.' };
+    }
+
+    // Mock cost check
+    const cost = 1000; // Crew creation cost
+    if (this.state.player.credits < cost) {
+      return { error: `Insufficient credits. Cost: ${cost} CR` };
+    }
+
+    this.state.player.credits -= cost;
+
+    // Create mock crew
+    const crewId = 'crew_' + Math.random().toString(36).substr(2, 6);
+    const crew = {
+      id: crewId,
+      name: name,
+      type: 'CREW',
+      leader: this.state.player.id,
+      members: [
+        { id: this.state.player.id, name: 'You', role: 'LEADER' }
+      ],
+      treasury: 0,
+    };
+
+    // Assign to player
+    this.state.player.organization = {
+      id: crew.id,
+      name: crew.name,
+      role: 'LEADER',
+      data: crew // store full data for mock mode
+    };
+
+    return { success: true, crew };
+  }
+
+  async leaveCrew() {
+    if (!this.state.player.organization) {
+      return { error: 'You are not in an organization.' };
+    }
+
+    const org = this.state.player.organization;
+    
+    // Mock leave logic
+    if (org.role === 'LEADER' && org.data.members.length > 1) {
+      return { error: 'Leader cannot leave while there are other members. Disband or transfer leadership.' };
+    }
+
+    this.state.player.organization = null;
+    return { success: true };
+  }
+
+  async getCrewInfo() {
+    if (!this.state.player.organization) {
+      return { error: 'You are not in an organization.' };
+    }
+    return { success: true, info: this.state.player.organization.data };
+  }
+
+  // === Sovereignty System ===
+
+  async deployStructure(typeId) {
+    const structureDef = SOVEREIGNTY_STRUCTURES[typeId.toUpperCase()];
+    if (!structureDef) {
+      return { error: 'Invalid structure type.' };
+    }
+
+    // Check organization requirement
+    if (!this.state.player.organization) {
+      return { error: 'You must be in an organization to deploy structures.' };
+    }
+
+    const orgType = this.state.player.organization.data.type;
+    const allowed = ORGANIZATION_TYPES[orgType]?.allowedStructures;
+    
+    if (allowed !== 'all' && !allowed.includes(structureDef.id)) {
+      return { error: `${structureDef.name} requires a ${structureDef.requiresOrg.toUpperCase()} organization.` };
+    }
+
+    // Check zone requirement
+    if (structureDef.requiresZone && this.state.connection.network.zone !== structureDef.requiresZone.toLowerCase()) {
+      return { error: `${structureDef.name} can only be deployed in ${structureDef.requiresZone}.` };
+    }
+
+    // Check credits
+    if (this.state.player.credits < structureDef.deployCost) {
+      return { error: `Insufficient credits. Cost: ${structureDef.deployCost} CR` };
+    }
+
+    // Deploy logic (Mock)
+    this.state.player.credits -= structureDef.deployCost;
+    
+    const structure = {
+      id: `${typeId}_${Date.now()}`,
+      type: typeId,
+      name: structureDef.name,
+      location: this.state.connection.network.ip,
+      ownerOrg: this.state.player.organization.id,
+      status: 'ONLINE', // In real game, would be 'DEPLOYING'
+      health: structureDef.health,
+    };
+
+    // Add to network (mock)
+    if (!this.state.connection.network.structures) {
+      this.state.connection.network.structures = [];
+    }
+    this.state.connection.network.structures.push(structure);
+
+    return { success: true, structure };
+  }
+
+  async getSovereigntyStatus() {
+    // Mock status - would usually fetch from server
+    const network = this.state.connection.network;
+    if (!network) return { error: 'Not connected.' };
+
+    return {
+      network: network.ip,
+      zone: network.zone,
+      structures: network.structures || [],
+      sovereignty: network.sovereignty || 'UNCLAIMED'
+    };
+  }
+
+  async siegeStructure(structureId) {
+    const network = this.state.connection.network;
+    if (!network) return { error: 'Not connected.' };
+
+    if (!network.structures) return { error: 'No structures found.' };
+
+    const structure = network.structures.find(s => s.id === structureId);
+    if (!structure) return { error: 'Structure not found.' };
+
+    if (structure.ownerOrg === this.state.player.organization?.id) {
+      return { error: 'Cannot siege your own structure.' };
+    }
+
+    // Check if already sieging
+    if (structure.status === 'UNDER_SIEGE') {
+      return { error: 'Structure already under siege.' };
+    }
+
+    // Start siege (Mock)
+    structure.status = 'UNDER_SIEGE';
+    
+    // Calculate siege time (mock ADM)
+    // Base 5 minutes + 1 min per ADM level (mock ADM=1)
+    const siegeDuration = 300 + 60; 
+
+    return { success: true, structure, duration: siegeDuration };
+  }
+
   // === Server Generation ===
 
   generateServer(ip) {
@@ -427,6 +620,7 @@ export class Game {
       ice: null,
       breached: true,
       files: [],
+      resources: Math.random() > 0.5 ? [{ type: 'bandwidth_tokens', amount: Math.floor(5 + Math.random() * 10) }] : [],
     });
 
     // Add firewall
@@ -438,6 +632,7 @@ export class Game {
       ice: { ...ICE_TYPES.FIREWALL, strength: 100 + Math.floor(difficulty * 200) },
       breached: false,
       files: [],
+      resources: [],
     });
 
     // Add database with files
@@ -454,9 +649,14 @@ export class Game {
         { name: 'user_data.db', size: 1024 * 512, value: 200, encrypted: false },
         { name: 'logs.txt', size: 1024 * 10, value: 0, encrypted: false },
       ],
+      resources: Math.random() > 0.3 ? [{ type: 'data_packets', amount: Math.floor(10 + Math.random() * 20) }] : [],
     });
 
     // Add vault (high value target)
+    const vaultResources = [];
+    if (difficulty > 0.4) vaultResources.push({ type: 'encryption_keys', amount: Math.floor(1 + Math.random() * 5) });
+    if (difficulty > 0.8) vaultResources.push({ type: 'zero_days', amount: 1 });
+
     nodes.push({
       id: 'vault_1',
       type: 'vault',
@@ -470,7 +670,43 @@ export class Game {
         { name: 'financial_records.enc', size: 1024 * 1024, value: 1000 + Math.floor(difficulty * 2000), encrypted: true },
         { name: 'credentials.txt', size: 1024, value: 500, encrypted: false },
       ],
+      resources: vaultResources,
     });
+
+    // Add Research Lab (Very High Difficulty)
+    if (difficulty > 0.8) {
+       nodes[nodes.length - 1].connections.push('research_lab_1');
+       nodes.push({
+        id: 'research_lab_1',
+        type: 'research_lab',
+        ...NODE_TYPES.RESEARCH_LAB,
+        connections: ['vault_1'],
+        ice: { ...ICE_TYPES.SCRAMBLER },
+        breached: false,
+        files: [
+          { name: 'experiment_data.enc', size: 1024 * 512, value: 1500, encrypted: true },
+        ],
+        resources: [{ type: 'zero_days', amount: 1 }],
+       });
+    }
+
+    // Add Quantum Node (Extreme Difficulty)
+    if (difficulty > 0.95) {
+       // Connect to research lab or vault
+       const parentId = difficulty > 0.8 ? 'research_lab_1' : 'vault_1';
+       nodes[nodes.length - 1].connections.push('quantum_node_1'); // Connect to last node
+       
+       nodes.push({
+        id: 'quantum_node_1',
+        type: 'quantum_node',
+        ...NODE_TYPES.QUANTUM_NODE,
+        connections: [parentId],
+        ice: { ...ICE_TYPES.BLACK_ICE, strength: 500, damage: 50 },
+        breached: false,
+        files: [],
+        resources: [{ type: 'quantum_cores', amount: Math.floor(1 + Math.random() * 2) }],
+       });
+    }
 
     const owners = ['CyberCorp', 'DataVault Inc', 'NeoTech', 'Axiom Systems', 'Player_' + Math.random().toString(36).substr(2, 6)];
 
