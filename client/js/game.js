@@ -65,6 +65,7 @@ export class Game {
 
       this.ws.onopen = () => {
         console.log('[Game] WebSocket connected');
+        this.isOnline = true;
         this.generateContracts();
         resolve(true);
       };
@@ -79,14 +80,15 @@ export class Game {
       };
 
       this.ws.onerror = (error) => {
-        console.error('[Game] WebSocket error:', error);
-        // Fallback to offline mode
-        this.state.player.id = 'offline_' + Math.random().toString(36).substr(2, 9);
-        resolve(true);
+        console.error('[Game] WebSocket error - server connection required');
+        this.isOnline = false;
+        reject(new Error('Server connection required. Cannot play offline.'));
       };
 
       this.ws.onclose = () => {
         console.log('[Game] WebSocket disconnected');
+        this.isOnline = false;
+        window.dispatchEvent(new CustomEvent('connection-lost'));
       };
     });
   }
@@ -129,16 +131,15 @@ export class Game {
 
   /**
    * Send a message to the server and wait for response
-   * Uses WebSocket if connected, falls back to mocks if offline
+   * Server connection is REQUIRED - no offline mode
    */
   async sendMessage(type, payload = {}) {
-    // If WebSocket is connected, send real message
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      return this.sendWebSocketMessage(type, payload);
+    // Server connection is required
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return { error: 'Not connected to server. Please refresh the page.' };
     }
 
-    // Fallback to mock responses for offline mode
-    return this.getMockResponse(type, payload);
+    return this.sendWebSocketMessage(type, payload);
   }
 
   sendWebSocketMessage(type, payload) {
@@ -146,10 +147,9 @@ export class Game {
       const messageId = ++this.messageId;
       const timeout = setTimeout(() => {
         this.pendingCallbacks.delete(messageId);
-        // Timeout - fall back to mock
-        console.log(`[Game] Request ${type} timed out, using mock`);
-        resolve(this.getMockResponse(type, payload));
-      }, 5000);
+        console.error(`[Game] Request ${type} timed out`);
+        resolve({ error: 'Server request timed out. Please try again.' });
+      }, 10000);
 
       this.pendingCallbacks.set(messageId, (response) => {
         clearTimeout(timeout);
@@ -158,143 +158,6 @@ export class Game {
 
       this.ws.send(JSON.stringify({ type, payload, messageId }));
     });
-  }
-
-  getMockResponse(type, payload) {
-    switch (type) {
-      case 'DOCK':
-        // Check if at a network with Safe House (mock)
-        return {
-          success: true,
-          safeHouse: {
-            id: 'safehouse_mock',
-            name: 'Demo Data Haven',
-            type: 'npc_public',
-            hasRepair: true,
-            hasMarket: true,
-            hasCloning: true,
-          },
-          fee: 50,
-          credits: this.state.player.credits - 50,
-        };
-
-      case 'UNDOCK':
-        return { success: true };
-
-      case 'HANGAR':
-        return {
-          success: true,
-          safeHouse: 'Demo Data Haven',
-          rigs: [],
-          software: [],
-          files: [],
-          resources: {
-            data_packets: 0,
-            bandwidth_tokens: 0,
-            encryption_keys: 0,
-            access_tokens: 0,
-            zero_days: 0,
-            quantum_cores: 0,
-          },
-        };
-
-      case 'STORE_ITEM':
-        if (payload.itemType === 'resources' && this.state.player.resources[payload.itemId] !== undefined) {
-          const amount = payload.amount || this.state.player.resources[payload.itemId];
-          const storeAmount = Math.min(amount, this.state.player.resources[payload.itemId]);
-          this.state.player.resources[payload.itemId] -= storeAmount;
-          return {
-            success: true,
-            stored: { type: payload.itemId, amount: storeAmount },
-            remaining: this.state.player.resources[payload.itemId],
-          };
-        }
-        return { error: 'Invalid item.' };
-
-      case 'RETRIEVE_ITEM':
-        // Mock - no stored items initially
-        return { error: 'No items stored.' };
-
-      case 'SET_HOME':
-        return { success: true, home: 'Demo Data Haven' };
-
-      // Defender commands - mock responses
-      case 'DEFEND_VIEW':
-        return {
-          success: true,
-          intrusions: [], // No intrusions in single-player mock
-          counterPrograms: [
-            { id: 'backtrace', name: 'Backtrace', description: 'Trace the attacker\'s IP.', cost: 500 },
-            { id: 'counter_ice', name: 'Counter-ICE', description: 'Damage attacker hardware.', cost: 1000 },
-            { id: 'lockdown', name: 'Lockdown', description: 'Force-disconnect all intruders.', cost: 2000 },
-          ],
-        };
-
-      case 'DEFEND_BACKTRACE':
-      case 'DEFEND_COUNTERICE':
-      case 'DEFEND_LOCKDOWN':
-        return { error: 'No active intrusions to target.' };
-
-      // Market commands - mock responses
-      case 'MARKET_LIST':
-        return {
-          success: true,
-          orders: [], // No orders in single-player mock
-          myOrders: [],
-        };
-
-      case 'MARKET_SELL':
-        return { error: 'Market not available in offline mode.' };
-
-      case 'MARKET_BUY':
-        return { error: 'Market not available in offline mode.' };
-
-      // Rig/Repair - mock responses
-      case 'RIG_STATUS':
-        return {
-          integrity: 100,
-          maxIntegrity: 100,
-          isDegraded: false,
-          degradedPenalty: 0,
-          repairCost: 0,
-        };
-
-      case 'REPAIR':
-        return { error: 'Rig is at full integrity.' };
-
-      // Chat & Reputation - mock responses
-      case 'CHAT_SEND':
-        return { success: true };
-
-      case 'GET_REPUTATION':
-        return {
-          ip: this.state.player.ip,
-          reputation: 50,
-          title: 'Script Kiddie',
-          successfulHacks: 5,
-          tracedCount: 1,
-          trades: 3,
-        };
-
-      case 'GET_SKILLS':
-        return {
-          specialization: null,
-          unlockedSkills: [],
-          paths: [
-            { id: 'infiltrator', name: 'Infiltrator', icon: '🔓', description: 'Master of stealth.', skills: [] },
-            { id: 'sentinel', name: 'Sentinel', icon: '🛡️', description: 'Network defender.', skills: [] },
-            { id: 'broker', name: 'Broker', icon: '💰', description: 'Information trader.', skills: [] },
-          ],
-          respecCost: 5000,
-        };
-
-      case 'CHOOSE_SPEC':
-      case 'LEARN_SKILL':
-        return { error: 'Specialization not available in offline mode.' };
-
-      default:
-        return { error: 'Unknown message type.' };
-    }
   }
 
   generateIP() {

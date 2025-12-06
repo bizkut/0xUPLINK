@@ -350,7 +350,7 @@ export const SAFE_HOUSE_TYPES = {
     description: 'NPC-operated safe house. Open to all, charges fees.',
     rigSlots: 10,
     vaultCapacity: 1000,
-    dockingFee: 50,
+    dockingFee: 0,
     storageFeePerDay: 10,
     hasRepair: true,
     hasMarket: true,
