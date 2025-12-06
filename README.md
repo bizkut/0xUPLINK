@@ -1,9 +1,9 @@
 # 0xUPLINK // Netrunner MMO
 
-> **Status**: Alpha v0.5  
-> **Latest**: EVE Theme, Status Sidebar, Specialization Paths, Interactive Network Map
+> **Status**: Alpha v0.6  
+> **Latest**: Computer Models (EVE-style rigs), Local Storage System, Public Chat
 
-A cyberpunk hacking MMO inspired by *Uplink*, *Mr. Robot*, and *EVE Online*. Hack servers, steal data, harvest resources, dock at Safe Houses, and claim sovereignty over the DarkNet in a persistent, player-driven world.
+A cyberpunk hacking MMO inspired by *Uplink*, *Mr. Robot*, and *EVE Online*. Hack servers, steal data, harvest resources, dock at Safe Houses, customize your rig, and claim sovereignty over the DarkNet in a persistent, player-driven world.
 
 ## 🚀 Quick Start
 
@@ -118,6 +118,24 @@ Temporary high-value networks that appear randomly (like EVE wormholes):
 | `retrieve resources <type> [amt]` | Take items |
 | `sethome` | Set respawn point |
 
+### Computer/Rig System
+| Command | Description |
+|---------|-------------|
+| `rig` | View current rig stats and modules |
+| `rigs` | List all available rig classes |
+| `modules` | List available modules |
+| `fit <module_id>` | Equip a module |
+| `unfit <module_id>` | Unequip a module |
+| `rig buy <rig_id>` | Purchase a new rig |
+
+### Local Storage
+| Command | Description |
+|---------|-------------|
+| `ls` | List local files (when disconnected) |
+| `storage` | View storage usage |
+| `cat <file>` | Read file contents |
+| `rm <file>` | Delete local file |
+
 ### Info & Management
 | Command | Description |
 |---------|-------------|
@@ -188,25 +206,29 @@ Temporary high-value networks that appear randomly (like EVE wormholes):
 
 ### Status Sidebar
 The right sidebar displays real-time information:
-- **Rig Status**: Integrity bar (repairs when damaged)
+- **Computer**: Current rig name, specialty, CPU/RAM/BW stats
+- **Slots**: Core, Memory, Expansion usage
+- **Modules**: List of equipped modules
 - **Resources**: All 6 resource types at a glance
 - **Reputation**: Title and score
 - **Quick Actions**: Context-sensitive buttons
 
-### Contextual Actions
-Buttons appear automatically based on your situation:
-- **@ Safe House**: Dock, Hangar, Set Home
-- **Connected (Hacking)**: Harvest, Clean Logs, Disconnect
-- **Under Attack**: Defend, Lockdown
-
-### Interactive Network Map
-Click nodes directly on the network map to move (same as `move <node>` command).
+### Computer Models (EVE-Style Rigs)
+9 rig classes with unique specializations:
+| Rig | Specialty | Bonus |
+|-----|-----------|-------|
+| Burner | None | Starter rig |
+| Phantom | Stealth | +40% trace resist |
+| Harvester | Mining | +50% harvest yield |
+| Razorback | Assault | +35% breach speed |
+| Bastion | Defense | +50% firewall |
+| Mule | Storage | +100% capacity |
+| Wraith | Evasion | Clean disconnect |
+| Hydra | Multi-target | 2 connections |
+| Blacksite | Counterintel | +30% detection |
 
 ### Theme
-EVE Online-inspired dark space aesthetic with:
-- Semi-transparent panels
-- Blue hover effects
-- Amber highlights for important items
+EVE Online-inspired dark space aesthetic with semi-transparent panels, blue hover effects, and amber highlights.
 
 ---
 

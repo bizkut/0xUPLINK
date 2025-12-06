@@ -256,6 +256,15 @@ class App {
       case 'download':
         await this.cmdDownload(args);
         break;
+      case 'storage':
+        this.cmdStorage();
+        break;
+      case 'cat':
+        this.cmdCat(args);
+        break;
+      case 'rm':
+        this.cmdRm(args);
+        break;
       case 'harvest':
         await this.cmdHarvest();
         break;
@@ -694,11 +703,31 @@ class App {
   }
 
   cmdLs() {
+    // When not connected, show local files
     if (!this.game.state.connection.active) {
-      this.terminal.print('Not connected to any server.', 'error');
+      const storageInfo = this.game.getStorageInfo();
+      const files = storageInfo.files;
+
+      this.terminal.print('═══════════════════════════════════════', 'info');
+      this.terminal.print(`  LOCAL STORAGE [${storageInfo.used}/${storageInfo.capacity} MB]`, 'highlight');
+      this.terminal.print('═══════════════════════════════════════', 'info');
+
+      if (files.length === 0) {
+        this.terminal.print('  No files.', 'system');
+      } else {
+        for (const f of files) {
+          const size = `${f.size || 1} MB`.padStart(8);
+          const type = f.type ? `[${f.type.toUpperCase()}]` : '';
+          this.terminal.print(`  ${f.name.padEnd(25)} ${size} ${type}`, 'system');
+        }
+      }
+
+      this.terminal.print('', 'system');
+      this.terminal.print('Commands: cat <file> | rm <file> | storage', 'info');
       return;
     }
 
+    // When connected, show remote server files
     const currentNode = this.game.getCurrentNode();
     const files = currentNode.files || [];
 
@@ -748,6 +777,106 @@ class App {
     if (result.credits) {
       this.terminal.print(`Value: ${result.credits} CR`, 'success');
     }
+
+    // Save to local storage
+    const saveResult = this.game.addLocalFile({
+      name: filename,
+      size: Math.ceil(file.size / 1024 / 1024) || 1, // Convert to MB
+      type: file.encrypted ? 'encrypted' : 'data',
+      content: file.content || '[binary data]',
+      source: this.game.state.connection.targetIp,
+    });
+
+    if (saveResult.success) {
+      this.terminal.print(`Saved to local storage.`, 'system');
+    } else {
+      this.terminal.print(`Warning: ${saveResult.error}`, 'warning');
+    }
+  }
+
+  cmdStorage() {
+    const info = this.game.getStorageInfo();
+    const usagePercent = Math.round((info.used / info.capacity) * 100);
+    const barWidth = 30;
+    const filledWidth = Math.round((info.used / info.capacity) * barWidth);
+    const bar = '█'.repeat(filledWidth) + '░'.repeat(barWidth - filledWidth);
+
+    this.terminal.print('═══════════════════════════════════════', 'info');
+    this.terminal.print('  LOCAL STORAGE', 'highlight');
+    this.terminal.print('═══════════════════════════════════════', 'info');
+    this.terminal.print(`  [${bar}] ${usagePercent}%`, usagePercent > 80 ? 'warning' : 'system');
+    this.terminal.print(`  Used: ${info.used} MB / ${info.capacity} MB`, 'system');
+    this.terminal.print(`  Free: ${info.free} MB`, info.free < 20 ? 'warning' : 'success');
+    this.terminal.print('', 'system');
+    this.terminal.print(`  Files: ${info.files.length}`, 'system');
+    this.terminal.print(`  Software: ${info.installedSoftware.length}`, 'system');
+    this.terminal.print('', 'system');
+    this.terminal.print('Commands: ls | cat <file> | rm <file>', 'info');
+  }
+
+  cmdCat(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: cat <filename>', 'error');
+      return;
+    }
+
+    const filename = args[0];
+
+    // Check if connected - then cat remote file
+    if (this.game.state.connection.active) {
+      const currentNode = this.game.getCurrentNode();
+      const file = (currentNode.files || []).find(f => f.name === filename);
+      if (!file) {
+        this.terminal.print(`File not found: ${filename}`, 'error');
+        return;
+      }
+      if (file.encrypted) {
+        this.terminal.print(`Cannot read encrypted file. Use decryptor.`, 'warning');
+        return;
+      }
+      this.terminal.print(`=== ${filename} ===`, 'info');
+      this.terminal.print(file.content || '[binary data]', 'system');
+      return;
+    }
+
+    // Not connected - cat local file
+    const result = this.game.readLocalFile(filename);
+    if (!result.success) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print(`=== ${filename} ===`, 'info');
+    this.terminal.print(result.file.content || '[binary data]', 'system');
+  }
+
+  cmdRm(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: rm <filename>', 'error');
+      return;
+    }
+
+    const filename = args[0];
+
+    // Only works on local files when not connected
+    if (this.game.state.connection.active) {
+      this.terminal.print('Cannot delete local files while connected. Disconnect first.', 'warning');
+      return;
+    }
+
+    // Protect system files
+    if (filename === 'config.sys') {
+      this.terminal.print('Cannot delete system files.', 'error');
+      return;
+    }
+
+    const result = this.game.deleteLocalFile(filename);
+    if (!result.success) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print(result.message, 'success');
   }
 
   async cmdHarvest() {

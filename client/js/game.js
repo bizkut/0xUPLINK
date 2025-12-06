@@ -45,6 +45,16 @@ export class Game {
           zero_days: 0,
           quantum_cores: 0,
         },
+        // Local storage on player's computer
+        localStorage: {
+          capacity: 100, // Base capacity in MB, modified by rig class
+          used: 0,
+          files: [
+            { name: 'readme.txt', size: 1, type: 'text', content: 'Welcome to UPLINK. Type "help" for commands.' },
+            { name: 'config.sys', size: 2, type: 'system', content: 'SYSTEM_CONFIG=default' },
+          ],
+          installedSoftware: [], // Software installed on local machine
+        },
       },
       connection: {
         active: false,
@@ -1209,5 +1219,91 @@ export class Game {
       ramUsed: this.getTotalModuleRamCost(),
       integrity: this.state.player.hardware?.integrity || 100,
     };
+
+    // Update storage capacity based on rig
+    this.updateStorageCapacity();
+  }
+
+  // === Local Storage Management ===
+
+  updateStorageCapacity() {
+    const rig = this.state.player.rig.class;
+    let baseCapacity = 100; // Base 100 MB
+
+    // Apply rig bonus (Mule has +100% inventory = +100% storage)
+    const inventoryMultiplier = rig.bonuses.inventorySlots || 1.0;
+    this.state.player.localStorage.capacity = Math.floor(baseCapacity * inventoryMultiplier);
+
+    // Recalculate used space
+    this.recalculateStorageUsed();
+  }
+
+  recalculateStorageUsed() {
+    let used = 0;
+    for (const file of this.state.player.localStorage.files) {
+      used += file.size || 1;
+    }
+    for (const sw of this.state.player.localStorage.installedSoftware) {
+      used += sw.size || 5;
+    }
+    this.state.player.localStorage.used = used;
+  }
+
+  getLocalFiles() {
+    return this.state.player.localStorage.files;
+  }
+
+  getStorageInfo() {
+    const storage = this.state.player.localStorage;
+    return {
+      capacity: storage.capacity,
+      used: storage.used,
+      free: storage.capacity - storage.used,
+      files: storage.files,
+      installedSoftware: storage.installedSoftware,
+    };
+  }
+
+  addLocalFile(file) {
+    const storage = this.state.player.localStorage;
+    const fileSize = file.size || 1;
+
+    if (storage.used + fileSize > storage.capacity) {
+      return { success: false, error: 'Insufficient storage space.' };
+    }
+
+    // Check for duplicate filename
+    const existing = storage.files.find(f => f.name === file.name);
+    if (existing) {
+      return { success: false, error: `File "${file.name}" already exists.` };
+    }
+
+    storage.files.push(file);
+    storage.used += fileSize;
+
+    return { success: true, message: `Saved ${file.name} (${fileSize} MB)` };
+  }
+
+  deleteLocalFile(filename) {
+    const storage = this.state.player.localStorage;
+    const index = storage.files.findIndex(f => f.name === filename);
+
+    if (index === -1) {
+      return { success: false, error: `File not found: ${filename}` };
+    }
+
+    const file = storage.files[index];
+    storage.files.splice(index, 1);
+    storage.used -= file.size || 1;
+
+    return { success: true, message: `Deleted ${filename}` };
+  }
+
+  readLocalFile(filename) {
+    const file = this.state.player.localStorage.files.find(f => f.name === filename);
+    if (!file) {
+      return { success: false, error: `File not found: ${filename}` };
+    }
+    return { success: true, file };
   }
 }
