@@ -78,6 +78,83 @@
           <div id="autocomplete-dropdown"></div>
         </div>
       </section>
+
+      <!-- Far Right Panel: Status & Quick Actions -->
+      <aside id="status-sidebar">
+        <!-- Rig Status -->
+        <div class="sidebar-section" id="rig-section">
+          <div class="sidebar-header">⚡ RIG STATUS</div>
+          <div class="stat-row">
+            <span class="stat-label">Integrity</span>
+            <div class="stat-bar-container">
+              <div class="stat-bar" id="rig-bar">
+                <div class="stat-fill" id="rig-fill" style="width:100%"></div>
+              </div>
+              <span class="stat-value" id="rig-value">100%</span>
+            </div>
+          </div>
+          <button class="sidebar-btn" id="btn-repair" data-cmd="repair">
+            🔧 Repair
+          </button>
+        </div>
+
+        <!-- Resources -->
+        <div class="sidebar-section" id="resources-section">
+          <div class="sidebar-header">📦 RESOURCES</div>
+          <div class="resource-mini-grid" id="resource-display">
+            <div class="res-mini"><span class="res-icon">📡</span><span id="res-data">0</span></div>
+            <div class="res-mini"><span class="res-icon">📶</span><span id="res-bw">0</span></div>
+            <div class="res-mini"><span class="res-icon">🔑</span><span id="res-keys">0</span></div>
+            <div class="res-mini"><span class="res-icon">🎫</span><span id="res-tokens">0</span></div>
+            <div class="res-mini"><span class="res-icon">💀</span><span id="res-zerodays">0</span></div>
+            <div class="res-mini"><span class="res-icon">💎</span><span id="res-quantum">0</span></div>
+          </div>
+        </div>
+
+        <!-- Reputation -->
+        <div class="sidebar-section" id="rep-section">
+          <div class="sidebar-header">👤 REPUTATION</div>
+          <div class="rep-display">
+            <span class="rep-title" id="player-title">Unknown</span>
+            <span class="rep-score" id="rep-score">0</span>
+          </div>
+        </div>
+
+        <!-- Quick Actions (contextual) -->
+        <div class="sidebar-section" id="quick-actions">
+          <div class="sidebar-header">⚡ QUICK ACTIONS</div>
+          <div class="quick-btn-grid" id="context-buttons">
+            <!-- Default actions -->
+            <button class="sidebar-btn" data-cmd="status">📊 Status</button>
+            <button class="sidebar-btn" data-cmd="explore">🔍 Explore</button>
+            <button class="sidebar-btn" data-cmd="market">🛒 Market</button>
+            <button class="sidebar-btn" data-cmd="skills">📚 Skills</button>
+          </div>
+          
+          <!-- Safe House actions (shown when at safe house) -->
+          <div class="context-group hidden" id="safehouse-actions">
+            <div class="context-label">@ Safe House</div>
+            <button class="sidebar-btn success" data-cmd="dock">🏠 Dock</button>
+            <button class="sidebar-btn" data-cmd="hangar">📦 Hangar</button>
+            <button class="sidebar-btn" data-cmd="sethome">🏡 Set Home</button>
+          </div>
+
+          <!-- Hacking actions (shown when connected) -->
+          <div class="context-group hidden" id="hacking-actions">
+            <div class="context-label">⚔ Connected</div>
+            <button class="sidebar-btn warning" data-cmd="harvest">🌾 Harvest</button>
+            <button class="sidebar-btn warning" data-cmd="clean">🧹 Clean Logs</button>
+            <button class="sidebar-btn danger" data-cmd="disconnect">🔌 Disconnect</button>
+          </div>
+
+          <!-- Defense actions (shown when intrusion detected) -->
+          <div class="context-group hidden" id="defense-actions">
+            <div class="context-label">🚨 Under Attack</div>
+            <button class="sidebar-btn danger" data-cmd="defend">🛡️ Defend</button>
+            <button class="sidebar-btn warning" data-cmd="lockdown">🔒 Lockdown</button>
+          </div>
+        </div>
+      </aside>
     </main>
 
     <!-- Bottom Action Bar -->

@@ -28,14 +28,14 @@ export class UI {
     });
 
     // Set initial IP
-    document.getElementById('player-ip').textContent = 
+    document.getElementById('player-ip').textContent =
       `${Math.floor(Math.random() * 223) + 1}.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
   }
 
   setConnected(connected, targetIp = null) {
     const indicator = document.getElementById('connection-indicator');
     const status = document.getElementById('connection-status');
-    
+
     if (connected) {
       indicator.classList.add('connected');
       status.textContent = targetIp || 'CONNECTED';
@@ -83,7 +83,7 @@ export class UI {
   showAlert(message) {
     document.getElementById('alert-message').textContent = message;
     this.alertOverlay.classList.remove('hidden');
-    
+
     // Play alert sound effect (if we had audio)
     this.flashScreen();
   }
@@ -128,7 +128,7 @@ export class UI {
   // Shop UI
   showShop(software, hardware, onBuy) {
     let content = '<h3>SOFTWARE</h3><div class="shop-items">';
-    
+
     software.forEach(s => {
       content += `
         <div class="shop-item">
@@ -141,7 +141,7 @@ export class UI {
         </div>
       `;
     });
-    
+
     content += '</div>';
 
     this.showModal('// BLACK MARKET', content, [
@@ -163,10 +163,9 @@ export class UI {
       <p><strong>Target:</strong> ${contract.targetIp}</p>
       <p><strong>Objective:</strong> ${contract.objective}</p>
       <p><strong>Reward:</strong> <span style="color: var(--text-primary)">${contract.reward} CR</span></p>
-      <p><strong>Difficulty:</strong> <span style="color: ${
-        contract.difficulty === 'HARD' ? 'var(--accent-red)' : 
-        contract.difficulty === 'MEDIUM' ? 'var(--accent-amber)' : 
-        'var(--text-primary)'
+      <p><strong>Difficulty:</strong> <span style="color: ${contract.difficulty === 'HARD' ? 'var(--accent-red)' :
+        contract.difficulty === 'MEDIUM' ? 'var(--accent-amber)' :
+          'var(--text-primary)'
       }">${contract.difficulty}</span></p>
     `;
 
@@ -179,7 +178,7 @@ export class UI {
   // File browser
   showFileBrowser(files, onDownload) {
     let content = '<div class="file-list">';
-    
+
     files.forEach(f => {
       const size = this.formatSize(f.size);
       content += `
@@ -191,7 +190,7 @@ export class UI {
         </div>
       `;
     });
-    
+
     content += '</div>';
 
     this.showModal('// FILES', content, [
@@ -204,6 +203,115 @@ export class UI {
         onDownload(item.dataset.file);
       });
     });
+  }
+
+  // === SIDEBAR STATUS UPDATES ===
+
+  initSidebar(commandHandler) {
+    // Wire up all sidebar buttons
+    document.querySelectorAll('.sidebar-btn[data-cmd]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cmd = btn.getAttribute('data-cmd');
+        if (cmd && commandHandler) {
+          commandHandler(cmd);
+        }
+      });
+    });
+  }
+
+  updateRigStatus(integrity, max = 100) {
+    const fill = document.getElementById('rig-fill');
+    const value = document.getElementById('rig-value');
+    const btn = document.getElementById('btn-repair');
+
+    if (!fill || !value) return;
+
+    const percent = Math.round((integrity / max) * 100);
+    fill.style.width = `${percent}%`;
+    value.textContent = `${percent}%`;
+
+    // Update color based on integrity
+    fill.classList.remove('warning', 'danger');
+    if (percent <= 25) {
+      fill.classList.add('danger');
+    } else if (percent <= 50) {
+      fill.classList.add('warning');
+    }
+
+    // Show/hide repair button
+    if (btn) {
+      btn.style.display = percent < 100 ? 'block' : 'none';
+    }
+  }
+
+  updateResources(resources) {
+    const mapping = {
+      data_packets: 'res-data',
+      bandwidth_tokens: 'res-bw',
+      encryption_keys: 'res-keys',
+      access_tokens: 'res-tokens',
+      zero_days: 'res-zerodays',
+      quantum_cores: 'res-quantum',
+    };
+
+    for (const [key, elementId] of Object.entries(mapping)) {
+      const el = document.getElementById(elementId);
+      if (el) {
+        el.textContent = resources[key] || 0;
+      }
+    }
+  }
+
+  updateReputation(rep, title) {
+    const titleEl = document.getElementById('player-title');
+    const scoreEl = document.getElementById('rep-score');
+
+    if (titleEl) titleEl.textContent = title || 'Unknown';
+    if (scoreEl) scoreEl.textContent = rep || 0;
+  }
+
+  updateHeatDisplay(heat, tier) {
+    const heatEl = document.getElementById('heat');
+    if (!heatEl) return;
+
+    heatEl.textContent = `${heat}%`;
+
+    // Update color class
+    heatEl.className = 'value';
+    if (tier === 'federal') {
+      heatEl.classList.add('heat-federal');
+    } else if (tier === 'hunted') {
+      heatEl.classList.add('heat-hunted');
+    } else if (tier === 'hot') {
+      heatEl.classList.add('heat-hot');
+    } else if (tier === 'warm') {
+      heatEl.classList.add('heat-warm');
+    } else {
+      heatEl.classList.add('heat-low');
+    }
+  }
+
+  // Show/hide contextual action groups
+  showContextActions(context) {
+    // Hide all context groups first
+    document.querySelectorAll('.context-group').forEach(g => {
+      g.classList.add('hidden');
+    });
+
+    // Show relevant group
+    if (context === 'safehouse') {
+      document.getElementById('safehouse-actions')?.classList.remove('hidden');
+    } else if (context === 'connected') {
+      document.getElementById('hacking-actions')?.classList.remove('hidden');
+    } else if (context === 'defense') {
+      document.getElementById('defense-actions')?.classList.remove('hidden');
+    }
+    // 'default' or null = show nothing extra
+  }
+
+  updateCredits(credits) {
+    const el = document.getElementById('credits');
+    if (el) el.textContent = credits;
   }
 
   formatSize(bytes) {

@@ -39,6 +39,61 @@ class App {
 
     // Setup hotkeys
     this.setupHotkeys();
+
+    // Initialize sidebar with command handler
+    this.ui.initSidebar((cmd) => this.handleCommand(cmd));
+
+    // Initial sidebar status update
+    this.updateSidebarStatus();
+  }
+
+  updateSidebarStatus() {
+    // Update rig
+    this.ui.updateRigStatus(this.game.state.player?.rigIntegrity || 100);
+
+    // Update resources
+    this.ui.updateResources(this.game.state.player?.resources || {});
+
+    // Update reputation
+    const rep = this.game.state.player?.reputation || 0;
+    const title = this.getRepTitle(rep);
+    this.ui.updateReputation(rep, title);
+
+    // Update heat
+    const heat = this.game.state.player?.heat || 0;
+    const tier = this.getHeatTier(heat);
+    this.ui.updateHeatDisplay(heat, tier);
+
+    // Update credits
+    this.ui.updateCredits(this.game.state.player?.credits || 1000);
+
+    // Update context actions based on game state
+    if (this.game.state.connected) {
+      this.ui.showContextActions('connected');
+    } else if (this.game.state.atSafeHouse) {
+      this.ui.showContextActions('safehouse');
+    } else {
+      this.ui.showContextActions(null);
+    }
+  }
+
+  getRepTitle(rep) {
+    if (rep >= 2500) return 'Legend';
+    if (rep >= 1000) return 'Ghost';
+    if (rep >= 500) return 'Netrunner';
+    if (rep >= 300) return 'Elite Hacker';
+    if (rep >= 150) return 'Hacker';
+    if (rep >= 50) return 'Script Kiddie';
+    if (rep >= 0) return 'Unknown';
+    return 'Blacklisted';
+  }
+
+  getHeatTier(heat) {
+    if (heat >= 80) return 'federal';
+    if (heat >= 60) return 'hunted';
+    if (heat >= 40) return 'hot';
+    if (heat >= 20) return 'warm';
+    return 'clean';
   }
 
   showWelcome() {
