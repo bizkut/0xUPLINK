@@ -1,10 +1,10 @@
 # PROJECT CONTEXT - 0xUPLINK
 
 ## Current Status
-**Development Phase**: 5 (Territory Warfare) - **COMPLETED**
-**Version**: 0.2.0 (Dockerized Prototype)
+**Development Phase**: 8 (Market Enhancement) - **IN PROGRESS**
+**Version**: 0.8.0 (Alpha)
 
-The core foundational systems are fully implemented, including the persistent universe, resource economy, player organizations, and the mock sovereignty/warfare system. The project is ready for expanded multiplayer testing and persistence layer integration (Database).
+The core systems are fully implemented including the persistent universe, resource economy, player organizations, sovereignty/warfare system, authentication with Supabase persistence, interactive market UI with NPC vendors, and dynamic trading simulation. The project supports Docker deployment.
 
 ## Vision Statement
 
@@ -136,5 +136,6 @@ BUILD → HACK → DEFEND → EXPAND
 
 - **Client**: Vanilla JS, HTML5 Canvas for node maps
 - **Server**: Node.js + Express + WebSocket
-- **Database**: TBD (likely PostgreSQL for persistence)
+- **Database**: Supabase (PostgreSQL) for persistence
 - **Real-time**: WebSocket for live hack battles and alerts
+- **Deployment**: Docker Compose

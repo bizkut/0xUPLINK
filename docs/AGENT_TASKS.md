@@ -195,12 +195,21 @@
 - [ ] Contract marketplace (player-created)
 - [x] **Player Market Economy** (Completed 2025-12-06)
   - Added `MARKET_CONFIG` and `TRADEABLE_RESOURCES` to `constants.js`
-  - Server handlers: MARKET_LIST, MARKET_SELL, MARKET_BUY, MARKET_CANCEL
+  - Server handlers: MARKET_LIST, MARKET_SELL, MARKET_BUY, MARKET_CANCEL, MARKET_MODIFY
   - Client commands: market, sell, buy
   - 5% transaction fee, 10 CR listing fee, 24hr order expiry
   - Auto-cleanup loop for expired orders with resource refund
+- [x] **Interactive Market UI** (Completed 2025-12-06)
+  - Eve Online-style market interface with 3-column layout
+  - Buy Orders, Sell Orders, My Orders tabs
+  - Category filtering, search, sorting
+  - Anonymous sellers (NPC vendors)
+- [x] **NPC Trading Simulation** (Completed 2025-12-07)
+  - 24-hour trading cycle: NPCs cancel, adjust prices, add new orders
+  - 8 NPC vendors with price modifiers
+  - MARKET_MODIFY handler with Eve-style bid/ask rules
+  - 2-minute order modification cooldown
 - [ ] Black market with dynamic prices
-- [ ] Player Market Economy (buy/sell orders)
 - [x] **Death/Loss Consequences** (Completed 2025-12-06)
   - Added `DEATH_CONFIG` constant with trace/kill penalties
   - Player model: rigIntegrity, homeSafeHouse, respawnProtection
@@ -249,8 +258,13 @@
   - Global chat panel below network map
   - Real-time messaging with player identification
   - Self-highlighting (amber vs blue for others)
-- [ ] Player authentication system
-- [ ] Session management
+- [x] **Authentication System** (Completed 2025-12-06)
+  - Supabase integration for user registration/login
+  - Single-session enforcement (kicks duplicate logins)
+  - Hacker-themed login UI with matrix rain effect
+- [x] **Player Persistence** (Completed 2025-12-06)
+  - Save/load player state to Supabase PostgreSQL
+  - Graceful fallback when database unavailable
 - [ ] Rate limiting
 - [ ] Admin tools
 

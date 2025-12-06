@@ -317,13 +317,49 @@ factions (id, name, type, treasury, tax_rate)
 faction_members (faction_id, player_id, role, joined_at)
 
 -- Economy
-market_orders (id, player_id, item_type, item_id, price, quantity, order_type)
+market_orders (id, player_id, item_type, item_id, price, quantity, order_type, last_modified, expires_at)
 transactions (id, buyer_id, seller_id, item_type, item_id, price, timestamp)
+
+-- NPC Vendors
+npc_vendors (id, vendor_code, name, price_modifier, is_active)
 
 -- Contracts
 contracts (id, issuer_id, target_network_id, objective, reward, status)
 contract_completions (contract_id, player_id, completed_at)
 ```
+
+---
+
+## Market System (Implemented)
+
+### Order Schema
+
+```javascript
+{
+  id: string,
+  sellerId: string,
+  sellerName: string,          // Anonymous display
+  orderType: 'sell' | 'buy',
+  resourceType: string,        // Or itemType, itemId for rigs/modules
+  amount: number,
+  originalAmount: number,      // For modification rules
+  pricePerUnit: number,
+  totalPrice: number,
+  createdAt: number,
+  lastModified: number,        // For 2-min cooldown
+  expiresAt: number,
+}
+```
+
+### Modification Rules (Eve-Style)
+- **Sell Orders**: Quantity can only DECREASE
+- **Buy Orders**: Quantity can only INCREASE
+- **Cooldown**: 2 minutes between modifications
+- **Fee**: 10 CR per modification (same as listing)
+
+### NPC Trading Simulation
+- Runs every 24 hours
+- 15% cancel, 25% price adjust, 10% partial fill, 20% restock
 
 ---
 
