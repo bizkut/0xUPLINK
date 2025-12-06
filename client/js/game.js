@@ -191,6 +191,9 @@ export class Game {
       case 'MARKET_CANCEL_RESULT':
         window.dispatchEvent(new CustomEvent('market-cancel-result', { detail: payload }));
         break;
+      case 'MARKET_MODIFY_RESULT':
+        window.dispatchEvent(new CustomEvent('market-modify-result', { detail: payload }));
+        break;
       case 'PLAYER_COUNT':
         window.dispatchEvent(new CustomEvent('player-count', { detail: payload }));
         break;

@@ -39,7 +39,7 @@ import {
   loadPlayerState
 } from './db.js';
 import { getRigById, getModuleById } from '../shared/computerModels.js';
-import { initializeNpcMarket, loadMarketOrdersFromDb, updateOrderQuantityInDb, deleteOrderFromDb } from './npcMarket.js';
+import { initializeNpcMarket, loadMarketOrdersFromDb, updateOrderQuantityInDb, deleteOrderFromDb, startNpcTradingSimulation } from './npcMarket.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -310,6 +310,9 @@ function handleMessage(player, message) {
       break;
     case 'MARKET_CANCEL':
       handleMarketCancel(player, payload);
+      break;
+    case 'MARKET_MODIFY':
+      handleMarketModify(player, payload);
       break;
     case 'REPAIR':
       handleRepair(player);
@@ -926,6 +929,9 @@ async function seedNpcMarket() {
     }
     console.log(`  NPC Market: ${result.orders.length} orders ${result.fromDb ? 'loaded from DB' : 'seeded to DB'}`);
   }
+
+  // Start the NPC trading simulation (runs every 24 hours)
+  startNpcTradingSimulation();
 }
 
 // Chat & Communications Handlers
@@ -1455,11 +1461,14 @@ function handleMarketSell(player, { resourceType, amount, pricePerUnit }) {
     id: orderId,
     sellerId: player.id,
     sellerName: player.ip, // Use IP as identifier
+    orderType: 'sell',     // Sell order (player selling resources)
     resourceType,
     amount,
+    originalAmount: amount, // Track original for modification rules
     pricePerUnit,
     totalPrice: amount * pricePerUnit,
     createdAt: Date.now(),
+    lastModified: Date.now(), // Track for modification cooldown
     expiresAt: Date.now() + MARKET_CONFIG.orderExpiry,
   };
 
@@ -1566,8 +1575,12 @@ function handleMarketCancel(player, { orderId }) {
     return;
   }
 
-  // Return resources to seller
-  player.resources[order.resourceType] = (player.resources[order.resourceType] || 0) + order.amount;
+  // Return resources to seller (for sell orders) or credits (for buy orders)
+  if (order.orderType === 'buy') {
+    player.credits += order.totalPrice;
+  } else {
+    player.resources[order.resourceType] = (player.resources[order.resourceType] || 0) + order.amount;
+  }
 
   gameState.marketOrders.delete(orderId);
 
@@ -1575,7 +1588,122 @@ function handleMarketCancel(player, { orderId }) {
     type: 'MARKET_CANCEL_RESULT',
     payload: {
       success: true,
-      returned: { resource: order.resourceType, amount: order.amount },
+      returned: order.orderType === 'buy'
+        ? { credits: order.totalPrice }
+        : { resource: order.resourceType, amount: order.amount },
+    },
+  }));
+}
+
+// Modify an existing order (Eve-style bid/ask rules)
+// Sell orders: quantity can only DECREASE
+// Buy orders: quantity can only INCREASE
+// 2-minute cooldown on modifications
+// Modification charged same as new listing
+function handleMarketModify(player, { orderId, newAmount, newPrice }) {
+  const order = gameState.marketOrders.get(orderId);
+
+  if (!order || order.sellerId !== player.id) {
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_MODIFY_RESULT',
+      payload: { error: 'Order not found or not yours.' },
+    }));
+    return;
+  }
+
+  const now = Date.now();
+
+  // Check 2-minute cooldown
+  if (order.lastModified && (now - order.lastModified) < MARKET_CONFIG.modifyCooldown) {
+    const remainingSeconds = Math.ceil((MARKET_CONFIG.modifyCooldown - (now - order.lastModified)) / 1000);
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_MODIFY_RESULT',
+      payload: { error: `Order on cooldown. Wait ${remainingSeconds} seconds.` },
+    }));
+    return;
+  }
+
+  // Validate new amount based on order type (Eve-style bid/ask)
+  if (newAmount !== undefined && newAmount !== order.amount) {
+    if (order.orderType === 'sell') {
+      // Sell orders: can only DECREASE quantity
+      if (newAmount > order.amount) {
+        player.ws.send(JSON.stringify({
+          type: 'MARKET_MODIFY_RESULT',
+          payload: { error: 'Sell orders can only decrease quantity, not increase.' },
+        }));
+        return;
+      }
+      if (newAmount <= 0) {
+        player.ws.send(JSON.stringify({
+          type: 'MARKET_MODIFY_RESULT',
+          payload: { error: 'Amount must be greater than 0. Use cancel instead.' },
+        }));
+        return;
+      }
+      // Return the difference to player's resources
+      const difference = order.amount - newAmount;
+      player.resources[order.resourceType] = (player.resources[order.resourceType] || 0) + difference;
+    } else if (order.orderType === 'buy') {
+      // Buy orders: can only INCREASE quantity
+      if (newAmount < order.amount) {
+        player.ws.send(JSON.stringify({
+          type: 'MARKET_MODIFY_RESULT',
+          payload: { error: 'Buy orders can only increase quantity, not decrease.' },
+        }));
+        return;
+      }
+      // Need to lock additional credits
+      const additionalQty = newAmount - order.amount;
+      const additionalCost = additionalQty * order.pricePerUnit;
+      if (player.credits < additionalCost + MARKET_CONFIG.listingFee) {
+        player.ws.send(JSON.stringify({
+          type: 'MARKET_MODIFY_RESULT',
+          payload: { error: `Insufficient credits. Need ${additionalCost + MARKET_CONFIG.listingFee} CR.` },
+        }));
+        return;
+      }
+      player.credits -= additionalCost;
+    }
+    order.amount = newAmount;
+    order.totalPrice = newAmount * order.pricePerUnit;
+  }
+
+  // Validate and apply new price
+  if (newPrice !== undefined && newPrice !== order.pricePerUnit) {
+    if (newPrice < MARKET_CONFIG.minPrice || newPrice > MARKET_CONFIG.maxPrice) {
+      player.ws.send(JSON.stringify({
+        type: 'MARKET_MODIFY_RESULT',
+        payload: { error: `Price must be between ${MARKET_CONFIG.minPrice} and ${MARKET_CONFIG.maxPrice} CR.` },
+      }));
+      return;
+    }
+    order.pricePerUnit = newPrice;
+    order.totalPrice = order.amount * newPrice;
+  }
+
+  // Charge listing fee (like new order)
+  if (player.credits < MARKET_CONFIG.listingFee) {
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_MODIFY_RESULT',
+      payload: { error: `Insufficient credits for modification fee (${MARKET_CONFIG.listingFee} CR).` },
+    }));
+    return;
+  }
+  player.credits -= MARKET_CONFIG.listingFee;
+
+  // Update modification timestamp
+  order.lastModified = now;
+
+  player.ws.send(JSON.stringify({
+    type: 'MARKET_MODIFY_RESULT',
+    payload: {
+      success: true,
+      orderId: order.id,
+      newAmount: order.amount,
+      newPrice: order.pricePerUnit,
+      fee: MARKET_CONFIG.listingFee,
+      credits: player.credits,
     },
   }));
 }

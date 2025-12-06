@@ -459,6 +459,7 @@ export const MARKET_CONFIG = {
   orderExpiry: 86400000,    // 24 hours in ms
   minPrice: 1,              // Minimum price per unit
   maxPrice: 1000000,        // Maximum price per unit
+  modifyCooldown: 120000,   // 2 minutes cooldown between order modifications
 };
 
 // Tradeable resource types

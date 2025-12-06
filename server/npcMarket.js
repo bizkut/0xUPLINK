@@ -408,3 +408,128 @@ export async function restockNpcOrders() {
 }
 
 export { PRICE_CONFIG };
+
+// === NPC TRADING SIMULATION ===
+// Simulates dynamic NPC market activity
+
+const NPC_SIMULATION_CONFIG = {
+    intervalMs: 24 * 60 * 60 * 1000, // Every 24 hours
+    cancelChance: 0.15,             // 15% chance to cancel an order
+    priceAdjustChance: 0.25,        // 25% chance to adjust price
+    priceAdjustRange: 0.15,         // ±15% price adjustment
+    newOrderChance: 0.20,           // 20% chance to add new order
+    partialFillChance: 0.10,        // 10% chance to simulate a sale
+    maxActionsPerCycle: 10,         // Max actions per simulation cycle
+};
+
+let simulationInterval = null;
+
+// Simulate NPC trading activity
+export async function simulateNpcTrading() {
+    const orders = await loadMarketOrdersFromDb();
+    const npcOrders = orders.filter(o => o.isNpc);
+
+    if (npcOrders.length === 0) {
+        console.log('[NPC Trading] No NPC orders to simulate');
+        return;
+    }
+
+    let actions = 0;
+    const maxActions = NPC_SIMULATION_CONFIG.maxActionsPerCycle;
+
+    // Shuffle orders for randomness
+    const shuffled = [...npcOrders].sort(() => Math.random() - 0.5);
+
+    for (const order of shuffled) {
+        if (actions >= maxActions) break;
+
+        const roll = Math.random();
+
+        // 1. Cancel order
+        if (roll < NPC_SIMULATION_CONFIG.cancelChance) {
+            await deleteOrderFromDb(order.id);
+            console.log(`[NPC Trading] Cancelled order: ${order.itemName}`);
+            actions++;
+            continue;
+        }
+
+        // 2. Adjust price
+        if (roll < NPC_SIMULATION_CONFIG.cancelChance + NPC_SIMULATION_CONFIG.priceAdjustChance) {
+            const adjustment = 1 + ((Math.random() * 2 - 1) * NPC_SIMULATION_CONFIG.priceAdjustRange);
+            const newPrice = Math.round(order.price * adjustment);
+
+            if (supabase) {
+                await supabase
+                    .from('market_orders')
+                    .update({ price: newPrice })
+                    .eq('id', order.id);
+            } else {
+                // In-memory update
+                const idx = inMemoryOrders.findIndex(o => o.id === order.id);
+                if (idx !== -1) inMemoryOrders[idx].price = newPrice;
+            }
+
+            console.log(`[NPC Trading] Price adjusted: ${order.itemName} ${order.price} -> ${newPrice}`);
+            actions++;
+            continue;
+        }
+
+        // 3. Partial fill (simulate sale - reduce quantity)
+        if (roll < NPC_SIMULATION_CONFIG.cancelChance + NPC_SIMULATION_CONFIG.priceAdjustChance + NPC_SIMULATION_CONFIG.partialFillChance) {
+            const soldQty = Math.floor(Math.random() * Math.min(3, order.quantity)) + 1;
+            const newQty = order.quantity - soldQty;
+
+            if (newQty <= 0) {
+                await deleteOrderFromDb(order.id);
+                console.log(`[NPC Trading] Sold out: ${order.itemName}`);
+            } else {
+                await updateOrderQuantityInDb(order.id, newQty);
+                console.log(`[NPC Trading] Sold ${soldQty}x ${order.itemName} (${newQty} remaining)`);
+            }
+            actions++;
+            continue;
+        }
+    }
+
+    // 4. Add new orders if chance triggers
+    if (Math.random() < NPC_SIMULATION_CONFIG.newOrderChance) {
+        const restocked = await restockNpcOrders();
+        if (restocked > 0) actions++;
+    }
+
+    if (actions > 0) {
+        console.log(`[NPC Trading] Simulation complete: ${actions} actions`);
+    }
+
+    return actions;
+}
+
+// Start the NPC trading simulation timer
+export function startNpcTradingSimulation() {
+    if (simulationInterval) {
+        clearInterval(simulationInterval);
+    }
+
+    console.log(`[NPC Trading] Starting simulation (every ${NPC_SIMULATION_CONFIG.intervalMs / 3600000} hours)`);
+
+    // Run first simulation after 1 minute (give server time to start)
+    setTimeout(() => {
+        simulateNpcTrading();
+
+        // Then run on interval
+        simulationInterval = setInterval(() => {
+            simulateNpcTrading();
+        }, NPC_SIMULATION_CONFIG.intervalMs);
+    }, 60000);
+
+    return simulationInterval;
+}
+
+// Stop the simulation
+export function stopNpcTradingSimulation() {
+    if (simulationInterval) {
+        clearInterval(simulationInterval);
+        simulationInterval = null;
+        console.log('[NPC Trading] Simulation stopped');
+    }
+}
