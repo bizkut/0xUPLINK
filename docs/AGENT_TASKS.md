@@ -150,18 +150,41 @@
   - Healthchecks and volume mapping
 
 ### UI Improvements
-- [ ] Add autocomplete for commands
+- [x] Add autocomplete for commands (Tab-completion already implemented)
 - [ ] Add button shortcuts for common actions
 - [ ] Improve node map visualization for larger networks
 - [ ] Add cluster/sector navigation view
 - [ ] Sound effects for alerts, hack success/fail
 
 ### Gameplay
+- [x] **Graded Heat System** (Completed 2025-12-06)
+  - Added `HEAT_THRESHOLDS` constant with 5 tiers (Clean/Suspicious/Wanted/Hunted/Federal)
+  - Added `getHeatTier()`, `getHeatEffects()`, `getHeatInfo()` methods to `game.js`
+  - Scan speed penalties at 30+ heat
+  - Trace rate multipliers at 70+ heat  
+  - ClearNet ban at 80+ heat (Federal level)
+  - Added `heat` command for detailed status display
+- [x] **Ghost Networks** (Completed 2025-12-06)
+  - Added `GHOST_NETWORK_CONFIG` and `GHOST_NETWORK_NAMES` to `constants.js`
+  - Added `generateGhostNetwork()`, `generateGhostNodes()` to `universe.js`
+  - 5x reward multiplier, guaranteed rare resources (zero-days, quantum cores)
+  - 30min-2hr random lifetime, auto-expire with player notification
+  - Server spawns 1-2 on startup, 10% spawn chance every 5 min
+  - Must be in DarkNet to scan for ghosts, no "local" visibility
+- [x] **Safe House Storage System** (Completed 2025-12-06)
+  - Added `SAFE_HOUSE_TYPES`, `SAFE_HOUSE_NAMES` to `constants.js`
+  - Created `safehouses.js` module with generation functions
+  - 15 NPC Safe Houses spawn across zones on server start
+  - Server handlers: DOCK, UNDOCK, HANGAR, STORE, RETRIEVE, SWAP_RIG, SET_HOME
+  - Client commands: dock, undock, hangar, store, retrieve, sethome
+  - Per-location asset storage (rigs, software, files, resources)
 - [ ] Faction warfare system (GreyNet control)
-- [ ] Bounty system for ClearNet crimes
+- [ ] Active Defender Counter-Play (real-time PvP responses)
+- [ ] Ghost Networks (temporary high-value "wormhole" zones)
 - [ ] Insurance/backup system for hardware
 - [ ] Contract marketplace (player-created)
 - [ ] Black market with dynamic prices
+- [ ] Player Market Economy (buy/sell orders)
 
 ### Technical
 - [ ] Database persistence (PostgreSQL)

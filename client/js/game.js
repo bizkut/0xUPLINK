@@ -1,4 +1,4 @@
-import { HARDWARE_TIERS, ICE_TYPES, SOFTWARE_TYPES, NODE_TYPES, GAME_CONFIG, COMMANDS, RESOURCES, SOVEREIGNTY_STRUCTURES, ORGANIZATION_TYPES } from '../../shared/constants.js';
+import { HARDWARE_TIERS, ICE_TYPES, SOFTWARE_TYPES, NODE_TYPES, GAME_CONFIG, COMMANDS, RESOURCES, SOVEREIGNTY_STRUCTURES, ORGANIZATION_TYPES, HEAT_THRESHOLDS } from '../../shared/constants.js';
 
 export class Game {
   constructor() {
@@ -59,6 +59,76 @@ export class Game {
     return true;
   }
 
+  /**
+   * Send a message to the server and wait for response
+   * For now, returns mock responses for Safe House commands
+   */
+  async sendMessage(type, payload) {
+    // TODO: Implement real WebSocket communication
+    // For now, return mock responses for testing client UI
+
+    switch (type) {
+      case 'DOCK':
+        // Check if at a network with Safe House (mock)
+        return {
+          success: true,
+          safeHouse: {
+            id: 'safehouse_mock',
+            name: 'Demo Data Haven',
+            type: 'npc_public',
+            hasRepair: true,
+            hasMarket: true,
+            hasCloning: true,
+          },
+          fee: 50,
+          credits: this.state.player.credits - 50,
+        };
+
+      case 'UNDOCK':
+        return { success: true };
+
+      case 'HANGAR':
+        return {
+          success: true,
+          safeHouse: 'Demo Data Haven',
+          rigs: [],
+          software: [],
+          files: [],
+          resources: {
+            data_packets: 0,
+            bandwidth_tokens: 0,
+            encryption_keys: 0,
+            access_tokens: 0,
+            zero_days: 0,
+            quantum_cores: 0,
+          },
+        };
+
+      case 'STORE_ITEM':
+        if (payload.itemType === 'resources' && this.state.player.resources[payload.itemId] !== undefined) {
+          const amount = payload.amount || this.state.player.resources[payload.itemId];
+          const storeAmount = Math.min(amount, this.state.player.resources[payload.itemId]);
+          this.state.player.resources[payload.itemId] -= storeAmount;
+          return {
+            success: true,
+            stored: { type: payload.itemId, amount: storeAmount },
+            remaining: this.state.player.resources[payload.itemId],
+          };
+        }
+        return { error: 'Invalid item.' };
+
+      case 'RETRIEVE_ITEM':
+        // Mock - no stored items initially
+        return { error: 'No items stored.' };
+
+      case 'SET_HOME':
+        return { success: true, home: 'Demo Data Haven' };
+
+      default:
+        return { error: 'Unknown message type.' };
+    }
+  }
+
   generateIP() {
     const octets = [
       Math.floor(Math.random() * 223) + 1,
@@ -77,10 +147,10 @@ export class Game {
     // Update trace if connected
     if (this.state.connection.active) {
       let traceRate = this.state.connection.traceRate;
-      
+
       // Apply hardware trace resistance
       traceRate *= (1 - this.state.player.hardware.traceResist / 100);
-      
+
       // Apply cloak if active
       if (this.state.connection.cloaked) {
         const proxyChain = this.state.player.software.find(s => s.id === 'proxy_chain');
@@ -100,12 +170,63 @@ export class Game {
     }
   }
 
+  // === Heat System ===
+
+  getHeatTier() {
+    const heat = this.state.player.heat;
+    // Find the highest tier the player qualifies for
+    let currentTier = HEAT_THRESHOLDS.CLEAN;
+    for (const tier of Object.values(HEAT_THRESHOLDS)) {
+      if (heat >= tier.level && tier.level >= currentTier.level) {
+        currentTier = tier;
+      }
+    }
+    return currentTier;
+  }
+
+  getHeatEffects() {
+    return this.getHeatTier().effects || {};
+  }
+
+  getHeatInfo() {
+    const tier = this.getHeatTier();
+    return {
+      heat: this.state.player.heat,
+      tier: tier.name,
+      color: tier.color,
+      description: tier.description,
+      effects: tier.effects,
+      nextTierAt: this.getNextHeatThreshold(),
+    };
+  }
+
+  getNextHeatThreshold() {
+    const heat = this.state.player.heat;
+    const thresholds = Object.values(HEAT_THRESHOLDS)
+      .map(t => t.level)
+      .sort((a, b) => a - b);
+
+    for (const threshold of thresholds) {
+      if (threshold > heat) return threshold;
+    }
+    return null; // At max tier
+  }
+
   // === Scanning & Connecting ===
 
   async scanTarget(ip) {
     // Check if already scanned
     if (this.scannedServers[ip]) {
       return this.scannedServers[ip];
+    }
+
+    // Apply heat-based scan delay
+    const effects = this.getHeatEffects();
+    const scanMultiplier = effects.scanSpeedMultiplier || 1;
+    const baseScanTime = 500; // Base scan time in ms
+
+    if (scanMultiplier > 1) {
+      await this.delay(baseScanTime * (scanMultiplier - 1));
     }
 
     // Generate or fetch server data
@@ -117,6 +238,7 @@ export class Game {
       securityRating: server.securityRating,
       nodeCount: server.nodes.length,
       iceCount: server.nodes.filter(n => n.ice).length,
+      scanDelayed: scanMultiplier > 1,
     };
   }
 
@@ -131,7 +253,23 @@ export class Game {
     }
 
     const server = this.state.scannedServers[ip];
+    const effects = this.getHeatEffects();
+
+    // Check if player is banned from ClearNet (Federal heat level)
+    if (effects.clearnetBanned && server.zone === 'clearnet') {
+      return {
+        error: 'FEDERAL LOCKOUT: You cannot enter ClearNet while under federal investigation. Lay low in GreyNet or DarkNet.',
+        heatBlocked: true,
+      };
+    }
+
     const entryNode = server.nodes.find(n => n.type === 'gateway');
+
+    // Calculate trace rate with heat modifier
+    let traceRate = server.traceRate || GAME_CONFIG.BASE_TRACE_RATE;
+    if (effects.traceRateMultiplier) {
+      traceRate *= effects.traceRateMultiplier;
+    }
 
     this.state.connection = {
       active: true,
@@ -140,13 +278,15 @@ export class Game {
       network: server,
       currentNode: entryNode.id,
       trace: 0,
-      traceRate: server.traceRate || GAME_CONFIG.BASE_TRACE_RATE,
+      traceRate: traceRate,
       cloaked: false,
+      heatModified: !!effects.traceRateModifier,
     };
 
     return {
       entryNode: entryNode.id,
       network: server,
+      traceRateModified: !!effects.traceRateMultiplier,
     };
   }
 
@@ -215,7 +355,7 @@ export class Game {
     const current = this.getCurrentNode();
     if (!current) return [];
 
-    return this.state.connection.network.nodes.filter(n => 
+    return this.state.connection.network.nodes.filter(n =>
       current.connections.includes(n.id)
     );
   }
@@ -274,14 +414,14 @@ export class Game {
 
     if (success) {
       current.breached = true;
-      
+
       // Handle Black ICE damage
       if (current.ice.id === 'black_ice') {
         const damage = current.ice.damage || 10;
         this.state.player.hardware.integrity -= damage;
         return { success: true, damage };
       }
-      
+
       return { success: true };
     }
 
@@ -365,7 +505,7 @@ export class Game {
 
     // Clear resources
     current.resources = [];
-    
+
     // Increase trace slightly
     this.state.connection.trace += 5;
 
@@ -426,11 +566,11 @@ export class Game {
 
   getAvailableSoftware() {
     const available = [];
-    
+
     Object.entries(SOFTWARE_TYPES).forEach(([key, soft]) => {
       const owned = this.state.player.software.find(s => s.id === soft.id);
       const ownedLevel = owned ? owned.level : 0;
-      
+
       soft.versions.forEach(v => {
         if (v.level > ownedLevel) {
           available.push({
@@ -493,7 +633,7 @@ export class Game {
     }
 
     const org = this.state.player.organization;
-    
+
     // Mock leave logic
     if (org.role === 'LEADER' && org.data.members.length > 1) {
       return { error: 'Leader cannot leave while there are other members. Disband or transfer leadership.' };
@@ -525,7 +665,7 @@ export class Game {
 
     const orgType = this.state.player.organization.data.type;
     const allowed = ORGANIZATION_TYPES[orgType]?.allowedStructures;
-    
+
     if (allowed !== 'all' && !allowed.includes(structureDef.id)) {
       return { error: `${structureDef.name} requires a ${structureDef.requiresOrg.toUpperCase()} organization.` };
     }
@@ -542,7 +682,7 @@ export class Game {
 
     // Deploy logic (Mock)
     this.state.player.credits -= structureDef.deployCost;
-    
+
     const structure = {
       id: `${typeId}_${Date.now()}`,
       type: typeId,
@@ -595,10 +735,10 @@ export class Game {
 
     // Start siege (Mock)
     structure.status = 'UNDER_SIEGE';
-    
+
     // Calculate siege time (mock ADM)
     // Base 5 minutes + 1 min per ADM level (mock ADM=1)
-    const siegeDuration = 300 + 60; 
+    const siegeDuration = 300 + 60;
 
     return { success: true, structure, duration: siegeDuration };
   }
@@ -608,9 +748,9 @@ export class Game {
   generateServer(ip) {
     const difficulty = Math.random();
     const nodeCount = 4 + Math.floor(difficulty * 6);
-    
+
     const nodes = [];
-    
+
     // Always have a gateway
     nodes.push({
       id: 'gateway',
@@ -675,8 +815,8 @@ export class Game {
 
     // Add Research Lab (Very High Difficulty)
     if (difficulty > 0.8) {
-       nodes[nodes.length - 1].connections.push('research_lab_1');
-       nodes.push({
+      nodes[nodes.length - 1].connections.push('research_lab_1');
+      nodes.push({
         id: 'research_lab_1',
         type: 'research_lab',
         ...NODE_TYPES.RESEARCH_LAB,
@@ -687,16 +827,16 @@ export class Game {
           { name: 'experiment_data.enc', size: 1024 * 512, value: 1500, encrypted: true },
         ],
         resources: [{ type: 'zero_days', amount: 1 }],
-       });
+      });
     }
 
     // Add Quantum Node (Extreme Difficulty)
     if (difficulty > 0.95) {
-       // Connect to research lab or vault
-       const parentId = difficulty > 0.8 ? 'research_lab_1' : 'vault_1';
-       nodes[nodes.length - 1].connections.push('quantum_node_1'); // Connect to last node
-       
-       nodes.push({
+      // Connect to research lab or vault
+      const parentId = difficulty > 0.8 ? 'research_lab_1' : 'vault_1';
+      nodes[nodes.length - 1].connections.push('quantum_node_1'); // Connect to last node
+
+      nodes.push({
         id: 'quantum_node_1',
         type: 'quantum_node',
         ...NODE_TYPES.QUANTUM_NODE,
@@ -705,7 +845,7 @@ export class Game {
         breached: false,
         files: [],
         resources: [{ type: 'quantum_cores', amount: Math.floor(1 + Math.random() * 2) }],
-       });
+      });
     }
 
     const owners = ['CyberCorp', 'DataVault Inc', 'NeoTech', 'Axiom Systems', 'Player_' + Math.random().toString(36).substr(2, 6)];
@@ -776,7 +916,7 @@ export class Game {
         deadline: null,
       },
       {
-        id: 'contract_2', 
+        id: 'contract_2',
         title: 'Corporate Espionage',
         type: 'DATA_HEIST',
         targetIp: this.generateIP(),

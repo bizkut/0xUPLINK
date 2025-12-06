@@ -193,6 +193,69 @@ export const GAME_CONFIG = {
   STARTING_REPUTATION: 0,
 };
 
+// Graded Heat System - Effects escalate as heat increases
+export const HEAT_THRESHOLDS = {
+  CLEAN: {
+    level: 0,
+    name: 'Clean',
+    color: '#00ff00',
+    effects: {},
+    description: 'No criminal activity detected.',
+  },
+  SUSPICIOUS: {
+    level: 30,
+    name: 'Suspicious',
+    color: '#ffff00',
+    effects: {
+      scanSpeedMultiplier: 1.5, // Scans take 50% longer
+      clearnetAlertChance: 0.1, // 10% chance NPCs alert authorities
+    },
+    description: 'Authorities are starting to notice you.',
+  },
+  WANTED: {
+    level: 50,
+    name: 'Wanted',
+    color: '#ff8800',
+    effects: {
+      scanSpeedMultiplier: 2.0, // Scans take twice as long
+      clearnetAlertChance: 0.3, // 30% chance NPCs alert
+      autoBounty: true, // Auto-generate bounty contract
+      bountyAmount: 500, // Base bounty value
+    },
+    description: 'A bounty has been placed on your identity.',
+  },
+  HUNTED: {
+    level: 70,
+    name: 'Hunted',
+    color: '#ff4400',
+    effects: {
+      scanSpeedMultiplier: 3.0,
+      clearnetAlertChance: 0.5,
+      autoBounty: true,
+      bountyAmount: 2000,
+      hunterIceEnabled: true, // Hunter ICE can spawn when hacking
+      traceRateMultiplier: 1.25, // 25% faster trace
+    },
+    description: 'Elite hunter programs are tracking you.',
+  },
+  FEDERAL: {
+    level: 80,
+    name: 'Federal Investigation',
+    color: '#ff0000',
+    effects: {
+      scanSpeedMultiplier: 4.0,
+      clearnetAlertChance: 0.8,
+      autoBounty: true,
+      bountyAmount: 5000,
+      hunterIceEnabled: true,
+      traceRateMultiplier: 1.5,
+      raidTimer: 300, // 5 minute countdown to raid
+      clearnetBanned: true, // Cannot enter ClearNet
+    },
+    description: 'Federal agents are closing in. DANGER!',
+  },
+};
+
 // Security Zones (EVE-style Highsec/Lowsec/Nullsec)
 export const SECURITY_ZONES = {
   CLEARNET: {
@@ -243,6 +306,100 @@ export const SECURITY_ZONES = {
       canClaimSovereignty: true,
     },
   },
+};
+
+// Ghost Networks (Wormhole-like temporary zones)
+export const GHOST_NETWORK_CONFIG = {
+  id: 'ghost',
+  name: 'Ghost Network',
+  description: 'Unstable hidden network. Extremely valuable but temporary.',
+  color: '#aa00ff',
+  lifetimeRange: [1800, 7200], // 30 min to 2 hours in seconds
+  spawnChance: 0.1, // 10% chance per spawn cycle
+  spawnInterval: 300, // Check every 5 minutes
+  maxActive: 5, // Maximum active ghost networks at once
+  rules: {
+    canAttackPlayers: true,
+    sentinelResponse: false,
+    noLocal: true, // Cannot see other players in network
+    traceRateMultiplier: 0.5, // Slower traces
+    rewardMultiplier: 5.0, // 5x rewards!
+    heatGainMultiplier: 0.25, // Very low heat gain
+    canClaimSovereignty: false,
+    hidePlayerCount: true, // Don't show how many players inside
+  },
+  themes: ['ghost', 'void', 'experimental'],
+  // Resource bonuses
+  resourceMultiplier: 3,
+  guaranteedRareResources: true, // Always has zero-days or quantum cores
+};
+
+// Ghost Network themed names
+export const GHOST_NETWORK_NAMES = [
+  'Phantom Signal', 'Echo Chamber', 'Spectral Gateway', 'Void Whisper',
+  'Shadow Frequency', 'Dark Reflection', 'Null Instance', 'Ghost Protocol',
+  'Fading Node', 'Transient Link', 'Unstable Connection', 'Flickering Grid',
+  'Temporal Breach', 'Dimensional Rift', 'Quantum Shadow', 'Phase Shift',
+];
+
+// Safe House Configuration (EVE Station equivalent)
+export const SAFE_HOUSE_TYPES = {
+  NPC_PUBLIC: {
+    id: 'npc_public',
+    name: 'Public Data Haven',
+    description: 'NPC-operated safe house. Open to all, charges fees.',
+    rigSlots: 10,
+    vaultCapacity: 1000,
+    dockingFee: 50,
+    storageFeePerDay: 10,
+    hasRepair: true,
+    hasMarket: true,
+    hasCloning: true,
+  },
+  PLAYER_PRIVATE: {
+    id: 'player_private',
+    name: 'Private Safe House',
+    description: 'Player-deployed personal storage. No fees, limited access.',
+    rigSlots: 5,
+    vaultCapacity: 500,
+    dockingFee: 0,
+    storageFeePerDay: 0,
+    hasRepair: false,
+    hasMarket: false,
+    hasCloning: true,
+    deploymentCost: 50000,
+    requiredResources: { encryption_keys: 50, access_tokens: 20 },
+  },
+  CREW_SHARED: {
+    id: 'crew_shared',
+    name: 'Crew Hideout',
+    description: 'Organization-owned safe house with shared storage.',
+    rigSlots: 20,
+    vaultCapacity: 2000,
+    dockingFee: 0,
+    storageFeePerDay: 0,
+    hasRepair: true,
+    hasMarket: false,
+    hasCloning: true,
+    deploymentCost: 200000,
+    requiredResources: { encryption_keys: 200, access_tokens: 100, zero_days: 5 },
+  },
+};
+
+export const SAFE_HOUSE_NAMES = {
+  clearnet: [
+    'CyberCafe Alpha', 'NetZone Hub', 'DataLink Station', 'CloudNine Lounge',
+    'ByteStop Inn', 'Terminal Junction', 'AccessPoint Central', 'GridLock Haven',
+  ],
+  greynet: [
+    'Shadow Terminal', 'Gray Market Hub', 'Twilight Station', 'Borderline Cache',
+    'Midway Haven', 'Neutral Ground', 'Crossroads Node', 'Buffer Zone',
+  ],
+  darknet: [
+    'Black Site Alpha', 'Dead Drop', 'Smuggler\'s Cache', 'Underground Vault',
+    'Ghost Station', 'Phantom Point', 'Abyss Terminal', 'Void Haven',
+    'Shadow Broker', 'Dark Nexus', 'Hidden Fortress', 'Stealth Node',
+  ],
 };
 
 // Sectors (Regions of the Grid)
@@ -514,7 +671,7 @@ export const COMMANDS = [
   { cmd: 'help', desc: 'Show available commands', usage: 'help [command]' },
   { cmd: 'status', desc: 'Show current status and location', usage: 'status' },
   { cmd: 'clear', desc: 'Clear terminal', usage: 'clear' },
-  
+
   // Navigation (Universe)
   { cmd: 'location', desc: 'Show current location in the Grid', usage: 'location' },
   { cmd: 'explore', desc: 'Explore current cluster or sector', usage: 'explore [sector_name]' },
@@ -522,7 +679,7 @@ export const COMMANDS = [
   { cmd: 'jump', desc: 'Jump to connected network', usage: 'jump <network_id>' },
   { cmd: 'map', desc: 'Show cluster network map', usage: 'map' },
   { cmd: 'sectors', desc: 'List all sectors', usage: 'sectors' },
-  
+
   // Hacking
   { cmd: 'scan', desc: 'Scan target for nodes and ICE', usage: 'scan <ip>' },
   { cmd: 'connect', desc: 'Connect to target server', usage: 'connect <ip>' },
@@ -535,33 +692,33 @@ export const COMMANDS = [
   { cmd: 'abort', desc: 'Emergency disconnect (leaves trace)', usage: 'abort' },
   { cmd: 'clean', desc: 'Clean logs before disconnecting', usage: 'clean' },
   { cmd: 'cloak', desc: 'Activate proxy chain', usage: 'cloak' },
-  
+
   // Files
   { cmd: 'ls', desc: 'List files in current node', usage: 'ls' },
   { cmd: 'cat', desc: 'View file contents', usage: 'cat <filename>' },
   { cmd: 'rm', desc: 'Delete file', usage: 'rm <filename>' },
   { cmd: 'run', desc: 'Run a program', usage: 'run <program>' },
-  
+
   // Resources
   { cmd: 'resources', desc: 'View harvested resources', usage: 'resources' },
   { cmd: 'harvest', desc: 'Harvest resources from current node', usage: 'harvest' },
-  
+
   // Equipment
   { cmd: 'hardware', desc: 'View hardware specs', usage: 'hardware' },
   { cmd: 'software', desc: 'View installed software', usage: 'software' },
   { cmd: 'shop', desc: 'Open the black market', usage: 'shop' },
   { cmd: 'buy', desc: 'Purchase item', usage: 'buy <item_id>' },
   { cmd: 'upgrade', desc: 'Upgrade hardware', usage: 'upgrade <component>' },
-  
+
   // Contracts & Economy
   { cmd: 'contracts', desc: 'View available contracts', usage: 'contracts' },
   { cmd: 'accept', desc: 'Accept a contract', usage: 'accept <contract_id>' },
-  
+
   // Factions & Organizations
   { cmd: 'faction', desc: 'View faction info', usage: 'faction' },
   { cmd: 'join', desc: 'Join a faction', usage: 'join <faction_name>' },
   { cmd: 'crew', desc: 'Manage your crew', usage: 'crew [create|invite|leave|info]' },
-  
+
   // Sovereignty & Warfare
   { cmd: 'sov', desc: 'Sovereignty management', usage: 'sov [status|list|deploy]' },
   { cmd: 'siege', desc: 'Attack territory structure', usage: 'siege <structure_id>' },

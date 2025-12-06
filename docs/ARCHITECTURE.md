@@ -160,6 +160,33 @@ CREW_RESULT     // Organization updates
 
 ---
 
+### Heat System (Implemented)
+
+Heat represents criminal notoriety. Higher heat = more severe penalties.
+
+```javascript
+// Heat Thresholds (shared/constants.js)
+HEAT_THRESHOLDS = {
+  CLEAN:      { level: 0,  effects: {} },
+  SUSPICIOUS: { level: 30, effects: { scanSpeedMultiplier: 1.5 } },
+  WANTED:     { level: 50, effects: { autoBounty: true, bountyAmount: 500 } },
+  HUNTED:     { level: 70, effects: { hunterIceEnabled: true, traceRateMultiplier: 1.25 } },
+  FEDERAL:    { level: 80, effects: { clearnetBanned: true, raidTimer: 300 } },
+}
+```
+
+**Game.js Methods:**
+- `getHeatTier()` - Returns current tier object
+- `getHeatEffects()` - Returns active effects
+- `getHeatInfo()` - Full status for display
+
+**Applied Penalties:**
+- Scan speed slows at 30+ heat
+- Trace rate increases at 70+ heat
+- ClearNet connections blocked at 80+ heat
+
+---
+
 ## Planned Systems Architecture
 
 ### 1. Universe/World System

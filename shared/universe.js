@@ -1,11 +1,13 @@
-import { 
-  SECTORS, 
-  SECURITY_ZONES, 
-  NPC_FACTIONS, 
-  ICE_TYPES, 
+import {
+  SECTORS,
+  SECURITY_ZONES,
+  NPC_FACTIONS,
+  ICE_TYPES,
   NODE_TYPES,
   RESOURCES,
-  GAME_CONFIG 
+  GAME_CONFIG,
+  GHOST_NETWORK_CONFIG,
+  GHOST_NETWORK_NAMES,
 } from './constants.js';
 
 // Server name generators by theme
@@ -84,7 +86,7 @@ export function generateUniverse() {
   };
 
   let sectorIndex = 0;
-  
+
   for (const [sectorKey, sectorDef] of Object.entries(SECTORS)) {
     const sector = {
       id: sectorDef.id,
@@ -106,10 +108,10 @@ export function generateUniverse() {
         sectorIndex,
         c
       );
-      
+
       sector.clusters.push(clusterId);
       universe.clusters[clusterId] = cluster;
-      
+
       // Add networks to universe
       for (const networkId of cluster.networks) {
         universe.networks[networkId] = cluster.networkData[networkId];
@@ -129,7 +131,7 @@ export function generateUniverse() {
  */
 function generateCluster(clusterId, sectorDef, sectorIndex, clusterIndex) {
   const networkCount = 5 + Math.floor(Math.random() * 10); // 5-14 networks
-  
+
   const cluster = {
     id: clusterId,
     sectorId: sectorDef.id,
@@ -143,7 +145,7 @@ function generateCluster(clusterId, sectorDef, sectorIndex, clusterIndex) {
   for (let n = 0; n < networkCount; n++) {
     const networkId = `${clusterId}_net_${n}`;
     const networkIP = generateNetworkIP(sectorIndex, clusterIndex, n);
-    
+
     const security = randomSecurity(
       sectorDef.securityRange[0],
       sectorDef.securityRange[1]
@@ -173,7 +175,7 @@ function generateCluster(clusterId, sectorDef, sectorIndex, clusterIndex) {
 function generateNetwork(networkId, ip, security, theme, clusterId) {
   const zone = getSecurityZone(security);
   const difficulty = (1 - security) / 2 + 0.5; // 0.5-1.0 based on security
-  
+
   const serverNames = SERVER_NAMES[theme] || SERVER_NAMES.corporate;
   const ownerName = serverNames[Math.floor(Math.random() * serverNames.length)];
 
@@ -207,10 +209,10 @@ function generateNetwork(networkId, ip, security, theme, clusterId) {
 function generateNodes(difficulty, security, theme) {
   const nodes = [];
   const zone = getSecurityZone(security);
-  
+
   // Base node count scales with difficulty
   const baseNodeCount = 4 + Math.floor(difficulty * 6);
-  
+
   // Always have a gateway
   nodes.push({
     id: 'gateway',
@@ -230,8 +232,8 @@ function generateNodes(difficulty, security, theme) {
     type: 'firewall',
     ...NODE_TYPES.FIREWALL,
     connections: ['gateway', 'database_1'],
-    ice: { 
-      ...ICE_TYPES.FIREWALL, 
+    ice: {
+      ...ICE_TYPES.FIREWALL,
       strength: firewallStrength,
     },
     breached: false,
@@ -262,8 +264,8 @@ function generateNodes(difficulty, security, theme) {
     type: 'vault',
     ...NODE_TYPES.VAULT,
     connections: ['database_1'],
-    ice: { 
-      ...ICE_TYPES.BLACK_ICE, 
+    ice: {
+      ...ICE_TYPES.BLACK_ICE,
       strength: vaultIceStrength,
       damage: vaultDamage,
     },
@@ -302,52 +304,52 @@ function generateNodes(difficulty, security, theme) {
     });
   }
 
-    // Add trap node for very high difficulty
-    if (difficulty > 0.85) {
-      nodes[2].connections.push('trap_1');
-      nodes.push({
-        id: 'trap_1',
-        type: 'trap',
-        ...NODE_TYPES.TRAP,
-        connections: ['database_1'],
-        ice: { ...ICE_TYPES.FAILSAFE },
-        breached: false,
-        files: [{ name: 'secret_data.enc', size: 1024 * 1024, value: 0, trap: true }],
-        resources: [],
-      });
-    }
+  // Add trap node for very high difficulty
+  if (difficulty > 0.85) {
+    nodes[2].connections.push('trap_1');
+    nodes.push({
+      id: 'trap_1',
+      type: 'trap',
+      ...NODE_TYPES.TRAP,
+      connections: ['database_1'],
+      ice: { ...ICE_TYPES.FAILSAFE },
+      breached: false,
+      files: [{ name: 'secret_data.enc', size: 1024 * 1024, value: 0, trap: true }],
+      resources: [],
+    });
+  }
 
-    // Add research lab for high difficulty
-    if (difficulty > 0.7) {
-      // Connect to database
-      nodes[2].connections.push('research_lab_1');
-      nodes.push({
-        id: 'research_lab_1',
-        type: 'research_lab',
-        ...NODE_TYPES.RESEARCH_LAB,
-        connections: ['database_1'],
-        ice: { ...ICE_TYPES.SCRAMBLER },
-        breached: false,
-        files: generateFiles(difficulty, 'research_lab', zone),
-        resources: generateNodeResources('research_lab', security),
-      });
-    }
+  // Add research lab for high difficulty
+  if (difficulty > 0.7) {
+    // Connect to database
+    nodes[2].connections.push('research_lab_1');
+    nodes.push({
+      id: 'research_lab_1',
+      type: 'research_lab',
+      ...NODE_TYPES.RESEARCH_LAB,
+      connections: ['database_1'],
+      ice: { ...ICE_TYPES.SCRAMBLER },
+      breached: false,
+      files: generateFiles(difficulty, 'research_lab', zone),
+      resources: generateNodeResources('research_lab', security),
+    });
+  }
 
-    // Add quantum node for extreme difficulty (The Void)
-    if (difficulty > 0.9) {
-      // Connect to vault
-      nodes[3].connections.push('quantum_node_1');
-      nodes.push({
-        id: 'quantum_node_1',
-        type: 'quantum_node',
-        ...NODE_TYPES.QUANTUM_NODE,
-        connections: ['vault_1'],
-        ice: { ...ICE_TYPES.BLACK_ICE, strength: 500, damage: 100 },
-        breached: false,
-        files: [],
-        resources: generateNodeResources('quantum_node', security),
-      });
-    }
+  // Add quantum node for extreme difficulty (The Void)
+  if (difficulty > 0.9) {
+    // Connect to vault
+    nodes[3].connections.push('quantum_node_1');
+    nodes.push({
+      id: 'quantum_node_1',
+      type: 'quantum_node',
+      ...NODE_TYPES.QUANTUM_NODE,
+      connections: ['vault_1'],
+      ice: { ...ICE_TYPES.BLACK_ICE, strength: 500, damage: 100 },
+      breached: false,
+      files: [],
+      resources: generateNodeResources('quantum_node', security),
+    });
+  }
 
 
   return nodes;
@@ -433,11 +435,11 @@ function generateFiles(difficulty, nodeType, zone) {
 function generateNodeResources(nodeType, security) {
   const resources = [];
   const zone = getSecurityZone(security);
-  
+
   // Higher security = fewer/no resources (safe but low reward)
   // Lower security = more/better resources
   const resourceChance = security < 0 ? 0.8 : security < 0.5 ? 0.5 : 0.2;
-  
+
   if (Math.random() > resourceChance) return resources;
 
   switch (nodeType) {
@@ -508,14 +510,14 @@ function generateNodeResources(nodeType, security) {
  */
 function connectNetworks(cluster) {
   const networks = cluster.networks;
-  
+
   // Create a connected graph (minimum spanning tree + some extras)
   for (let i = 1; i < networks.length; i++) {
     // Connect to at least one previous network
     const targetIndex = Math.floor(Math.random() * i);
     const sourceNet = cluster.networkData[networks[i]];
     const targetNet = cluster.networkData[networks[targetIndex]];
-    
+
     sourceNet.connections.push(networks[targetIndex]);
     targetNet.connections.push(networks[i]);
   }
@@ -525,11 +527,11 @@ function connectNetworks(cluster) {
   for (let i = 0; i < extraConnections; i++) {
     const a = Math.floor(Math.random() * networks.length);
     const b = Math.floor(Math.random() * networks.length);
-    
+
     if (a !== b) {
       const netA = cluster.networkData[networks[a]];
       const netB = cluster.networkData[networks[b]];
-      
+
       if (!netA.connections.includes(networks[b])) {
         netA.connections.push(networks[b]);
         netB.connections.push(networks[a]);
@@ -563,7 +565,7 @@ export function getNetworksByZone(universe, zoneId) {
 export function getAdjacentNetworks(universe, networkId) {
   const network = universe.networks[networkId];
   if (!network) return [];
-  
+
   return network.connections.map(id => universe.networks[id]).filter(Boolean);
 }
 
@@ -572,30 +574,30 @@ export function getAdjacentNetworks(universe, networkId) {
  */
 export function findRoute(universe, fromNetworkId, toNetworkId) {
   if (fromNetworkId === toNetworkId) return [fromNetworkId];
-  
+
   // BFS to find shortest path
   const visited = new Set();
   const queue = [[fromNetworkId]];
-  
+
   while (queue.length > 0) {
     const path = queue.shift();
     const current = path[path.length - 1];
-    
+
     if (current === toNetworkId) return path;
-    
+
     if (visited.has(current)) continue;
     visited.add(current);
-    
+
     const network = universe.networks[current];
     if (!network) continue;
-    
+
     for (const neighbor of network.connections) {
       if (!visited.has(neighbor)) {
         queue.push([...path, neighbor]);
       }
     }
   }
-  
+
   return null; // No route found
 }
 
@@ -609,8 +611,191 @@ export function getStartingLocation(universe) {
     const allNetworks = Object.values(universe.networks);
     return allNetworks[Math.floor(Math.random() * allNetworks.length)];
   }
-  
+
   // Pick a random ClearNet network with high security
   const safeNetworks = clearnetNetworks.filter(n => n.security >= 0.7);
   return safeNetworks[Math.floor(Math.random() * safeNetworks.length)] || clearnetNetworks[0];
+}
+
+/**
+ * Generates a temporary Ghost Network (wormhole-like zone)
+ * Ghost Networks are high-value, temporary instances with special rules
+ */
+export function generateGhostNetwork() {
+  const config = GHOST_NETWORK_CONFIG;
+  const ghostId = `ghost_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+  // Random lifetime between 30 min and 2 hours
+  const lifetime = config.lifetimeRange[0] +
+    Math.floor(Math.random() * (config.lifetimeRange[1] - config.lifetimeRange[0]));
+
+  // Pick a random themed name
+  const ghostName = GHOST_NETWORK_NAMES[Math.floor(Math.random() * GHOST_NETWORK_NAMES.length)];
+
+  // Ghost networks have extreme security (very negative = very high rewards)
+  const security = -0.8 - Math.random() * 0.2; // -0.8 to -1.0
+  const difficulty = 0.85 + Math.random() * 0.15; // 0.85 to 1.0 (very hard)
+
+  // Generate unique IP in special range
+  const ip = `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+
+  const ghostNetwork = {
+    id: ghostId,
+    ip: ip,
+    clusterId: 'ghost_cluster', // Virtual cluster
+    owner: ghostName,
+    ownerId: 'ghost', // Special ghost owner
+    security: security,
+    zone: 'ghost',
+    zoneName: 'Ghost Network',
+    zoneColor: config.color,
+    isGhost: true, // Flag for special handling
+
+    // Timing
+    spawnedAt: Date.now(),
+    expiresAt: Date.now() + (lifetime * 1000),
+    lifetime: lifetime,
+    timeRemaining: lifetime,
+
+    // Special ghost rules
+    traceRate: GAME_CONFIG.BASE_TRACE_RATE * config.rules.traceRateMultiplier,
+    rewardMultiplier: config.rules.rewardMultiplier,
+    noLocal: config.rules.noLocal,
+    hidePlayerCount: config.rules.hidePlayerCount,
+
+    // Network data
+    nodes: generateGhostNodes(difficulty),
+    connections: [], // Ghost networks are isolated
+    playersInside: [], // Track who's in (hidden from others)
+    sovereignty: null,
+    structures: [],
+  };
+
+  return ghostNetwork;
+}
+
+/**
+ * Generates nodes for a Ghost Network with guaranteed rare resources
+ */
+function generateGhostNodes(difficulty) {
+  const config = GHOST_NETWORK_CONFIG;
+  const nodes = [];
+
+  // Ghost gateway with eerie theme
+  nodes.push({
+    id: 'gateway',
+    type: 'gateway',
+    ...NODE_TYPES.GATEWAY,
+    name: 'Spectral Gateway',
+    connections: ['void_firewall'],
+    ice: null,
+    breached: true,
+    files: [],
+    resources: [{ type: 'bandwidth_tokens', amount: 50 }],
+  });
+
+  // Strong void firewall
+  nodes.push({
+    id: 'void_firewall',
+    type: 'firewall',
+    ...NODE_TYPES.FIREWALL,
+    name: 'Void Barrier',
+    connections: ['gateway', 'data_cache', 'anomaly_node'],
+    ice: { ...ICE_TYPES.FIREWALL, strength: 400 + Math.floor(Math.random() * 100) },
+    breached: false,
+    files: [],
+    resources: [{ type: 'encryption_keys', amount: 10 + Math.floor(Math.random() * 10) }],
+  });
+
+  // Data cache with high-value data
+  nodes.push({
+    id: 'data_cache',
+    type: 'database',
+    ...NODE_TYPES.DATABASE,
+    name: 'Lost Data Cache',
+    connections: ['void_firewall', 'core_vault'],
+    ice: { ...ICE_TYPES.TRACKER },
+    breached: false,
+    password: true,
+    cracked: false,
+    files: [
+      { name: 'recovered_intel.enc', size: 1024 * 2048, value: 5000, encrypted: true },
+      { name: 'ghost_data.db', size: 1024 * 1024, value: 3000, encrypted: false },
+    ],
+    resources: [
+      { type: 'data_packets', amount: 100 + Math.floor(Math.random() * 100) },
+      { type: 'zero_days', amount: 1 }, // Guaranteed zero-day
+    ],
+  });
+
+  // Core vault with extreme rewards
+  nodes.push({
+    id: 'core_vault',
+    type: 'vault',
+    ...NODE_TYPES.VAULT,
+    name: 'Phantom Vault',
+    connections: ['data_cache', 'quantum_core'],
+    ice: { ...ICE_TYPES.BLACK_ICE, strength: 450, damage: 60 },
+    breached: false,
+    password: true,
+    cracked: false,
+    files: [
+      { name: 'classified_archive.enc', size: 1024 * 4096, value: 10000, encrypted: true },
+      { name: 'master_keys.txt', size: 512, value: 2500, encrypted: false },
+    ],
+    resources: [
+      { type: 'encryption_keys', amount: 20 },
+      { type: 'access_tokens', amount: 10 },
+      { type: 'zero_days', amount: Math.floor(1 + Math.random() * 2) },
+    ],
+  });
+
+  // Anomaly node (optional path with danger)
+  nodes.push({
+    id: 'anomaly_node',
+    type: 'research_lab',
+    ...NODE_TYPES.RESEARCH_LAB,
+    name: 'Anomaly Nexus',
+    connections: ['void_firewall'],
+    ice: { ...ICE_TYPES.SCRAMBLER },
+    breached: false,
+    files: [
+      { name: 'anomaly_research.enc', size: 1024 * 512, value: 4000, encrypted: true },
+    ],
+    resources: [
+      { type: 'data_packets', amount: 200 },
+    ],
+  });
+
+  // Quantum core - ultimate prize
+  nodes.push({
+    id: 'quantum_core',
+    type: 'quantum_node',
+    ...NODE_TYPES.QUANTUM_NODE,
+    name: 'Unstable Core',
+    connections: ['core_vault'],
+    ice: { ...ICE_TYPES.BLACK_ICE, strength: 600, damage: 80 },
+    breached: false,
+    files: [],
+    resources: [
+      { type: 'quantum_cores', amount: 2 + Math.floor(Math.random() * 3) }, // 2-4 quantum cores!
+    ],
+  });
+
+  return nodes;
+}
+
+/**
+ * Checks if a ghost network has expired
+ */
+export function isGhostExpired(ghostNetwork) {
+  return Date.now() > ghostNetwork.expiresAt;
+}
+
+/**
+ * Gets remaining time for a ghost network in seconds
+ */
+export function getGhostTimeRemaining(ghostNetwork) {
+  const remaining = Math.max(0, ghostNetwork.expiresAt - Date.now());
+  return Math.floor(remaining / 1000);
 }

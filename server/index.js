@@ -4,15 +4,25 @@ import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { 
-  generateUniverse, 
-  findNetworkByIP, 
+import {
+  generateUniverse,
+  findNetworkByIP,
   getNetworksByZone,
   getStartingLocation,
   findRoute,
-  getSecurityZone 
+  getSecurityZone,
+  generateGhostNetwork,
+  isGhostExpired,
+  getGhostTimeRemaining,
 } from '../shared/universe.js';
-import { SECURITY_ZONES, SECTORS, FACTIONS } from '../shared/constants.js';
+import { SECURITY_ZONES, SECTORS, FACTIONS, GHOST_NETWORK_CONFIG, SAFE_HOUSE_TYPES } from '../shared/constants.js';
+import {
+  generateNPCSafeHouse,
+  findSafeHouseAtNetwork,
+  canDock,
+  getEmptyAssetStorage,
+  createRig,
+} from '../shared/safehouses.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,6 +36,8 @@ const gameState = {
   players: new Map(),
   servers: new Map(), // Legacy - for player servers
   universe: null, // The persistent world
+  ghostNetworks: new Map(), // Active ghost networks
+  safeHouses: new Map(), // Safe Houses for docking and storage
   contracts: [],
   factions: {
     syndicate: { members: [], treasury: 0 },
@@ -76,13 +88,13 @@ app.get('/api/universe/networks/:zone', (req, res) => {
 // WebSocket handling
 wss.on('connection', (ws) => {
   const playerId = uuidv4();
-  
+
   console.log(`Player connected: ${playerId}`);
 
   // Get starting location in the universe
   const startingNetwork = getStartingLocation(gameState.universe);
   const startingSector = Object.values(gameState.universe.sectors)
-    .find(s => s.clusters.some(c => 
+    .find(s => s.clusters.some(c =>
       gameState.universe.clusters[c]?.networks.includes(startingNetwork.id)
     ));
 
@@ -202,6 +214,33 @@ function handleMessage(player, message) {
     case 'SIEGE_START':
       handleSiegeStart(player, payload);
       break;
+    case 'GHOST_SCAN':
+      handleGhostScan(player);
+      break;
+    case 'GHOST_ENTER':
+      handleGhostEnter(player, payload);
+      break;
+    case 'DOCK':
+      handleDock(player);
+      break;
+    case 'UNDOCK':
+      handleUndock(player);
+      break;
+    case 'HANGAR':
+      handleHangar(player);
+      break;
+    case 'STORE_ITEM':
+      handleStoreItem(player, payload);
+      break;
+    case 'RETRIEVE_ITEM':
+      handleRetrieveItem(player, payload);
+      break;
+    case 'SWAP_RIG':
+      handleSwapRig(player, payload);
+      break;
+    case 'SET_HOME':
+      handleSetHome(player);
+      break;
     default:
       console.log('Unknown message type:', type);
   }
@@ -218,10 +257,10 @@ function handleDeployStructure(player, { type, networkId }) {
   // 2. Validate location (must be in DarkNet or allowed zone)
   // 3. Validate treasury/credits
   // 4. Update universe state
-  
+
   // For now, we'll just acknowledge the deployment
   // The client handles the credit deduction and local state update for the prototype
-  
+
   // Find the network in the universe
   const network = gameState.universe.networks[networkId];
   if (network) {
@@ -235,7 +274,7 @@ function handleDeployStructure(player, { type, networkId }) {
       ownerOrg: player.organization
     });
   }
-  
+
   console.log(`Player ${player.id} deployed ${type} on ${networkId}`);
 }
 
@@ -256,7 +295,7 @@ function handleCrewAction(player, { action, name }) {
         }));
         return;
       }
-      
+
       player.credits -= 1000;
       const crewId = `crew_${Date.now()}`;
       const crew = {
@@ -264,19 +303,19 @@ function handleCrewAction(player, { action, name }) {
         name: name,
         type: 'CREW',
         leader: player.id,
-        members: [{ id: player.id, name: `Player_${player.id.substr(0,6)}`, role: 'LEADER' }],
+        members: [{ id: player.id, name: `Player_${player.id.substr(0, 6)}`, role: 'LEADER' }],
         treasury: 0
       };
-      
+
       gameState.organizations.set(crewId, crew);
       player.organization = crewId;
-      
+
       player.ws.send(JSON.stringify({
         type: 'CREW_RESULT',
         payload: { success: true, crew }
       }));
       break;
-      
+
     case 'info':
       if (!player.organization) {
         player.ws.send(JSON.stringify({
@@ -285,28 +324,28 @@ function handleCrewAction(player, { action, name }) {
         }));
         return;
       }
-      
+
       const org = gameState.organizations.get(player.organization);
       player.ws.send(JSON.stringify({
         type: 'CREW_RESULT',
         payload: { success: true, crew: org }
       }));
       break;
-      
+
     case 'leave':
       if (!player.organization) {
-         player.ws.send(JSON.stringify({
+        player.ws.send(JSON.stringify({
           type: 'CREW_RESULT',
           payload: { error: 'Not in an organization' }
         }));
         return;
       }
-      
+
       const currentOrg = gameState.organizations.get(player.organization);
       // Simple leave logic
       currentOrg.members = currentOrg.members.filter(m => m.id !== player.id);
       player.organization = null;
-      
+
       player.ws.send(JSON.stringify({
         type: 'CREW_RESULT',
         payload: { success: true, left: true }
@@ -317,7 +356,7 @@ function handleCrewAction(player, { action, name }) {
 
 function handleScan(player, { targetIp }) {
   const targetServer = findTarget(targetIp);
-  
+
   if (!targetServer) {
     player.ws.send(JSON.stringify({
       type: 'SCAN_RESULT',
@@ -342,7 +381,7 @@ function handleScan(player, { targetIp }) {
 
 function handleConnect(player, { targetIp }) {
   const targetServer = findTarget(targetIp);
-  
+
   if (!targetServer) {
     player.ws.send(JSON.stringify({
       type: 'CONNECT_RESULT',
@@ -379,7 +418,7 @@ function handleHack(player, { action, nodeId, targetIp }) {
 
   // Process hack action and update server state
   // This would include breach, download, etc.
-  
+
   // Broadcast to target if online
   const targetPlayer = gameState.players.get(targetServer.ownerId);
   if (targetPlayer && targetPlayer.online) {
@@ -424,7 +463,7 @@ function handleJoinFaction(player, { factionId }) {
 
 function handleNavigate(player, { targetNetworkId }) {
   const targetNetwork = gameState.universe.networks[targetNetworkId];
-  
+
   if (!targetNetwork) {
     player.ws.send(JSON.stringify({
       type: 'NAVIGATE_RESULT',
@@ -435,7 +474,7 @@ function handleNavigate(player, { targetNetworkId }) {
 
   // Find route from current location
   const route = findRoute(gameState.universe, player.location.networkId, targetNetworkId);
-  
+
   if (!route) {
     player.ws.send(JSON.stringify({
       type: 'NAVIGATE_RESULT',
@@ -480,7 +519,7 @@ function handleNavigate(player, { targetNetworkId }) {
 
 function handleExplore(player, { clusterId, sectorId }) {
   let networks = [];
-  
+
   if (clusterId) {
     const cluster = gameState.universe.clusters[clusterId];
     if (cluster) {
@@ -653,7 +692,7 @@ function isPlayerOnline(playerId) {
 function findTarget(ip) {
   // Check legacy/player servers first
   let target = gameState.servers.get(ip);
-  
+
   // If not found, check universe networks
   if (!target && gameState.universe) {
     const network = findNetworkByIP(gameState.universe, ip);
@@ -667,7 +706,7 @@ function findTarget(ip) {
       }
     }
   }
-  
+
   return target;
 }
 
@@ -706,10 +745,10 @@ function generateNPCNodes(count, security) {
       id: 'firewall_1',
       type: 'firewall',
       connections: ['gateway', 'database_1'],
-      ice: { 
-        id: 'firewall', 
-        name: 'Firewall', 
-        strength: security === 'HIGH' ? 300 : security === 'MEDIUM' ? 200 : 100 
+      ice: {
+        id: 'firewall',
+        name: 'Firewall',
+        strength: security === 'HIGH' ? 300 : security === 'MEDIUM' ? 200 : 100
       },
       files: [],
     },
@@ -728,17 +767,17 @@ function generateNPCNodes(count, security) {
       id: 'vault_1',
       type: 'vault',
       connections: ['database_1'],
-      ice: { 
-        id: 'black_ice', 
-        name: 'Black ICE', 
+      ice: {
+        id: 'black_ice',
+        name: 'Black ICE',
         strength: security === 'HIGH' ? 400 : 250,
         damage: security === 'HIGH' ? 40 : 20,
       },
       password: true,
       files: [
-        { 
-          name: 'financial_records.enc', 
-          size: 1024 * 1024, 
+        {
+          name: 'financial_records.enc',
+          size: 1024 * 1024,
           value: security === 'HIGH' ? 5000 : security === 'MEDIUM' ? 2000 : 1000,
           encrypted: true,
         },
@@ -753,15 +792,15 @@ function generateNPCNodes(count, security) {
 function initializeUniverse() {
   console.log('Generating universe...');
   const startTime = Date.now();
-  
+
   gameState.universe = generateUniverse();
-  
+
   const elapsed = Date.now() - startTime;
   console.log(`Universe generated in ${elapsed}ms`);
   console.log(`  Sectors: ${Object.keys(gameState.universe.sectors).length}`);
   console.log(`  Clusters: ${Object.keys(gameState.universe.clusters).length}`);
   console.log(`  Networks: ${gameState.universe.totalNetworks}`);
-  
+
   // Log zone distribution
   const zoneCount = { clearnet: 0, greynet: 0, darknet: 0 };
   for (const network of Object.values(gameState.universe.networks)) {
@@ -773,18 +812,479 @@ function initializeUniverse() {
 // Initialize
 initializeUniverse();
 generateNPCServers(); // Legacy NPC servers for backwards compatibility
+spawnNPCSafeHouses(); // Spawn Safe Houses in the universe
+spawnInitialGhostNetworks(); // Spawn some ghost networks on startup
+startGhostSpawnLoop(); // Start periodic ghost spawning
+
+// Safe House spawning
+function spawnNPCSafeHouses() {
+  const zones = ['clearnet', 'greynet', 'darknet'];
+  const safeHousesPerZone = { clearnet: 5, greynet: 4, darknet: 6 };
+
+  for (const zone of zones) {
+    const networks = getNetworksByZone(gameState.universe, zone);
+    const count = Math.min(safeHousesPerZone[zone], networks.length);
+
+    // Pick random networks for Safe Houses
+    const shuffled = networks.sort(() => Math.random() - 0.5);
+    for (let i = 0; i < count; i++) {
+      const network = shuffled[i];
+      const safeHouse = generateNPCSafeHouse(network.id, network.ip, zone);
+      gameState.safeHouses.set(safeHouse.id, safeHouse);
+
+      // Mark network as having a Safe House
+      network.hasSafeHouse = true;
+      network.safeHouseId = safeHouse.id;
+    }
+  }
+
+  console.log(`  Safe Houses: ${gameState.safeHouses.size} spawned`);
+}
+
+// Safe House Handlers
+function handleDock(player) {
+  const network = gameState.universe.networks[player.location?.networkId];
+
+  if (!network || !network.hasSafeHouse) {
+    player.ws.send(JSON.stringify({
+      type: 'DOCK_RESULT',
+      payload: { error: 'No Safe House at this location.' },
+    }));
+    return;
+  }
+
+  const safeHouse = gameState.safeHouses.get(network.safeHouseId);
+  if (!safeHouse) {
+    player.ws.send(JSON.stringify({
+      type: 'DOCK_RESULT',
+      payload: { error: 'Safe House not found.' },
+    }));
+    return;
+  }
+
+  // Check access
+  const access = canDock(safeHouse, player);
+  if (!access.allowed) {
+    player.ws.send(JSON.stringify({
+      type: 'DOCK_RESULT',
+      payload: { error: access.reason },
+    }));
+    return;
+  }
+
+  // Charge docking fee
+  if (safeHouse.dockingFee > 0) {
+    player.credits -= safeHouse.dockingFee;
+  }
+
+  // Initialize player storage at this Safe House if needed
+  if (!safeHouse.storedAssets[player.id]) {
+    safeHouse.storedAssets[player.id] = getEmptyAssetStorage();
+  }
+
+  // Dock the player
+  player.docked = true;
+  player.dockedAt = safeHouse.id;
+  safeHouse.dockedPlayers.push(player.id);
+
+  player.ws.send(JSON.stringify({
+    type: 'DOCK_RESULT',
+    payload: {
+      success: true,
+      safeHouse: {
+        id: safeHouse.id,
+        name: safeHouse.name,
+        type: safeHouse.type,
+        hasRepair: safeHouse.hasRepair,
+        hasMarket: safeHouse.hasMarket,
+        hasCloning: safeHouse.hasCloning,
+      },
+      fee: safeHouse.dockingFee,
+      credits: player.credits,
+    },
+  }));
+}
+
+function handleUndock(player) {
+  if (!player.docked) {
+    player.ws.send(JSON.stringify({
+      type: 'UNDOCK_RESULT',
+      payload: { error: 'You are not docked.' },
+    }));
+    return;
+  }
+
+  const safeHouse = gameState.safeHouses.get(player.dockedAt);
+  if (safeHouse) {
+    safeHouse.dockedPlayers = safeHouse.dockedPlayers.filter(id => id !== player.id);
+  }
+
+  player.docked = false;
+  player.dockedAt = null;
+
+  player.ws.send(JSON.stringify({
+    type: 'UNDOCK_RESULT',
+    payload: { success: true },
+  }));
+}
+
+function handleHangar(player) {
+  if (!player.docked) {
+    player.ws.send(JSON.stringify({
+      type: 'HANGAR_RESULT',
+      payload: { error: 'You must be docked to access the hangar.' },
+    }));
+    return;
+  }
+
+  const safeHouse = gameState.safeHouses.get(player.dockedAt);
+  const assets = safeHouse?.storedAssets[player.id] || getEmptyAssetStorage();
+
+  player.ws.send(JSON.stringify({
+    type: 'HANGAR_RESULT',
+    payload: {
+      success: true,
+      safeHouse: safeHouse.name,
+      rigs: assets.rigs,
+      software: assets.software,
+      files: assets.files,
+      resources: assets.resources,
+    },
+  }));
+}
+
+function handleStoreItem(player, { itemType, itemId, amount }) {
+  if (!player.docked) {
+    player.ws.send(JSON.stringify({
+      type: 'STORE_RESULT',
+      payload: { error: 'You must be docked to store items.' },
+    }));
+    return;
+  }
+
+  const safeHouse = gameState.safeHouses.get(player.dockedAt);
+  const assets = safeHouse?.storedAssets[player.id];
+
+  if (!assets) {
+    player.ws.send(JSON.stringify({
+      type: 'STORE_RESULT',
+      payload: { error: 'Storage not initialized.' },
+    }));
+    return;
+  }
+
+  // Store resources
+  if (itemType === 'resources' && player.resources[itemId] !== undefined) {
+    const storeAmount = Math.min(amount || player.resources[itemId], player.resources[itemId]);
+    assets.resources[itemId] = (assets.resources[itemId] || 0) + storeAmount;
+    player.resources[itemId] -= storeAmount;
+
+    player.ws.send(JSON.stringify({
+      type: 'STORE_RESULT',
+      payload: {
+        success: true,
+        stored: { type: itemId, amount: storeAmount },
+        remaining: player.resources[itemId],
+      },
+    }));
+    return;
+  }
+
+  player.ws.send(JSON.stringify({
+    type: 'STORE_RESULT',
+    payload: { error: 'Invalid item or item type.' },
+  }));
+}
+
+function handleRetrieveItem(player, { itemType, itemId, amount }) {
+  if (!player.docked) {
+    player.ws.send(JSON.stringify({
+      type: 'RETRIEVE_RESULT',
+      payload: { error: 'You must be docked to retrieve items.' },
+    }));
+    return;
+  }
+
+  const safeHouse = gameState.safeHouses.get(player.dockedAt);
+  const assets = safeHouse?.storedAssets[player.id];
+
+  if (!assets) {
+    player.ws.send(JSON.stringify({
+      type: 'RETRIEVE_RESULT',
+      payload: { error: 'No items stored here.' },
+    }));
+    return;
+  }
+
+  // Retrieve resources
+  if (itemType === 'resources' && assets.resources[itemId] !== undefined) {
+    const retrieveAmount = Math.min(amount || assets.resources[itemId], assets.resources[itemId]);
+    player.resources[itemId] = (player.resources[itemId] || 0) + retrieveAmount;
+    assets.resources[itemId] -= retrieveAmount;
+
+    player.ws.send(JSON.stringify({
+      type: 'RETRIEVE_RESULT',
+      payload: {
+        success: true,
+        retrieved: { type: itemId, amount: retrieveAmount },
+        remaining: assets.resources[itemId],
+      },
+    }));
+    return;
+  }
+
+  player.ws.send(JSON.stringify({
+    type: 'RETRIEVE_RESULT',
+    payload: { error: 'Invalid item or item type.' },
+  }));
+}
+
+function handleSwapRig(player, { rigId }) {
+  if (!player.docked) {
+    player.ws.send(JSON.stringify({
+      type: 'SWAP_RIG_RESULT',
+      payload: { error: 'You must be docked to swap rigs.' },
+    }));
+    return;
+  }
+
+  const safeHouse = gameState.safeHouses.get(player.dockedAt);
+  const assets = safeHouse?.storedAssets[player.id];
+
+  if (!assets || assets.rigs.length === 0) {
+    player.ws.send(JSON.stringify({
+      type: 'SWAP_RIG_RESULT',
+      payload: { error: 'No rigs stored at this Safe House.' },
+    }));
+    return;
+  }
+
+  const rigIndex = assets.rigs.findIndex(r => r.id === rigId);
+  if (rigIndex === -1) {
+    player.ws.send(JSON.stringify({
+      type: 'SWAP_RIG_RESULT',
+      payload: { error: 'Rig not found.' },
+    }));
+    return;
+  }
+
+  // Swap rigs
+  const newRig = assets.rigs[rigIndex];
+  const currentRig = createRig(
+    player.activeRig?.name || 'Previous Rig',
+    player.hardware || {},
+    player.software || []
+  );
+
+  // Store current rig
+  assets.rigs[rigIndex] = currentRig;
+
+  // Apply new rig
+  player.hardware = newRig.hardware;
+  player.software = newRig.software;
+
+  player.ws.send(JSON.stringify({
+    type: 'SWAP_RIG_RESULT',
+    payload: {
+      success: true,
+      newRig: newRig.name,
+      storedRig: currentRig.name,
+    },
+  }));
+}
+
+function handleSetHome(player) {
+  if (!player.docked) {
+    player.ws.send(JSON.stringify({
+      type: 'SET_HOME_RESULT',
+      payload: { error: 'You must be docked to set home.' },
+    }));
+    return;
+  }
+
+  const safeHouse = gameState.safeHouses.get(player.dockedAt);
+  if (!safeHouse.hasCloning) {
+    player.ws.send(JSON.stringify({
+      type: 'SET_HOME_RESULT',
+      payload: { error: 'This Safe House does not have cloning services.' },
+    }));
+    return;
+  }
+
+  player.homeSafeHouse = safeHouse.id;
+
+  player.ws.send(JSON.stringify({
+    type: 'SET_HOME_RESULT',
+    payload: {
+      success: true,
+      home: safeHouse.name,
+    },
+  }));
+}
+function handleGhostScan(player) {
+  // Scan for active ghost networks from DarkNet locations
+  const playerLocation = player.location;
+  const playerNetwork = gameState.universe.networks[playerLocation?.networkId];
+
+  // Must be in DarkNet to scan for ghosts
+  if (!playerNetwork || playerNetwork.zone !== 'darknet') {
+    player.ws.send(JSON.stringify({
+      type: 'GHOST_SCAN_RESULT',
+      payload: { error: 'Ghost networks can only be detected from DarkNet zones.' },
+    }));
+    return;
+  }
+
+  // Check for active ghost networks and discovery chance
+  const activeGhosts = Array.from(gameState.ghostNetworks.values());
+  const discoveredGhosts = [];
+
+  for (const ghost of activeGhosts) {
+    // Discovery chance based on ghost age (older = more detectable)
+    const age = Date.now() - ghost.spawnedAt;
+    const baseChance = 0.3;
+    const ageBonus = Math.min(0.4, age / (ghost.lifetime * 1000) * 0.4);
+
+    if (Math.random() < baseChance + ageBonus) {
+      discoveredGhosts.push({
+        id: ghost.id,
+        ip: ghost.ip,
+        name: ghost.owner,
+        timeRemaining: getGhostTimeRemaining(ghost),
+        security: 'EXTREME',
+        zone: 'GHOST',
+      });
+    }
+  }
+
+  player.ws.send(JSON.stringify({
+    type: 'GHOST_SCAN_RESULT',
+    payload: {
+      success: true,
+      discovered: discoveredGhosts.length,
+      ghosts: discoveredGhosts,
+      totalActive: activeGhosts.length,
+    },
+  }));
+}
+
+function handleGhostEnter(player, { ghostId }) {
+  const ghost = gameState.ghostNetworks.get(ghostId);
+
+  if (!ghost) {
+    player.ws.send(JSON.stringify({
+      type: 'GHOST_ENTER_RESULT',
+      payload: { error: 'Ghost network not found or has collapsed.' },
+    }));
+    return;
+  }
+
+  if (isGhostExpired(ghost)) {
+    gameState.ghostNetworks.delete(ghostId);
+    player.ws.send(JSON.stringify({
+      type: 'GHOST_ENTER_RESULT',
+      payload: { error: 'Ghost network has collapsed!' },
+    }));
+    return;
+  }
+
+  // Add player to ghost network
+  ghost.playersInside.push(player.id);
+
+  player.ws.send(JSON.stringify({
+    type: 'GHOST_ENTER_RESULT',
+    payload: {
+      success: true,
+      network: ghost,
+      timeRemaining: getGhostTimeRemaining(ghost),
+      warning: 'WARNING: You cannot see other players in Ghost Networks. Proceed with caution.',
+    },
+  }));
+}
+
+// Ghost Network Spawning
+function spawnInitialGhostNetworks() {
+  // Spawn 1-2 ghost networks on server start
+  const count = 1 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < count; i++) {
+    spawnGhostNetwork();
+  }
+  console.log(`  Ghost Networks: ${gameState.ghostNetworks.size} active`);
+}
+
+function spawnGhostNetwork() {
+  if (gameState.ghostNetworks.size >= GHOST_NETWORK_CONFIG.maxActive) {
+    return null;
+  }
+
+  const ghost = generateGhostNetwork();
+  gameState.ghostNetworks.set(ghost.id, ghost);
+
+  console.log(`[GHOST] Spawned: ${ghost.owner} (${ghost.ip}) - ${Math.floor(ghost.lifetime / 60)}min lifetime`);
+
+  // Broadcast to all online players
+  for (const [, p] of gameState.players) {
+    if (p.online && p.ws) {
+      p.ws.send(JSON.stringify({
+        type: 'GHOST_SPAWN_ALERT',
+        payload: {
+          message: 'A Ghost Network has been detected in the system...',
+          // Don't reveal location - players must scan
+        },
+      }));
+    }
+  }
+
+  return ghost;
+}
+
+function cleanupExpiredGhosts() {
+  for (const [id, ghost] of gameState.ghostNetworks) {
+    if (isGhostExpired(ghost)) {
+      console.log(`[GHOST] Collapsed: ${ghost.owner} (${ghost.ip})`);
+
+      // Notify players inside
+      for (const playerId of ghost.playersInside) {
+        const player = gameState.players.get(playerId);
+        if (player && player.online) {
+          player.ws.send(JSON.stringify({
+            type: 'GHOST_COLLAPSE',
+            payload: {
+              message: 'The Ghost Network is collapsing! Emergency disconnect initiated.',
+            },
+          }));
+        }
+      }
+
+      gameState.ghostNetworks.delete(id);
+    }
+  }
+}
+
+function startGhostSpawnLoop() {
+  // Every 5 minutes, check for spawn and cleanup
+  setInterval(() => {
+    cleanupExpiredGhosts();
+
+    // Spawn chance
+    if (Math.random() < GHOST_NETWORK_CONFIG.spawnChance) {
+      spawnGhostNetwork();
+    }
+  }, GHOST_NETWORK_CONFIG.spawnInterval * 1000);
+}
 
 // Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
-║           0xUPLINK // Netrunner Server v0.2              ║
+║           0xUPLINK // Netrunner Server v0.4              ║
 ║                                                          ║
 ║     Running on port ${PORT}                                  ║
 ║     http://localhost:${PORT}                                 ║
 ║                                                          ║
 ║     Universe: ${gameState.universe.totalNetworks} networks across ${Object.keys(gameState.universe.sectors).length} sectors       ║
+║     Safe Houses: ${gameState.safeHouses.size} | Ghosts: ${gameState.ghostNetworks.size}                  ║
 ╚══════════════════════════════════════════════════════════╝
   `);
 });

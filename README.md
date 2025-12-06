@@ -1,89 +1,154 @@
 # 0xUPLINK // Netrunner MMO
 
-> **Status**: Prototype / Alpha
-> **Phase**: 5 (Territory Warfare) Completed
+> **Status**: Alpha v0.4  
+> **Latest**: Safe Houses, Ghost Networks, Graded Heat System
 
-A cyberpunk hacking MMO inspired by *Uplink*, *Mr. Robot*, and *EVE Online*. Hack servers, steal data, harvest resources, form syndicates, and claim sovereignty over the DarkNet in a persistent, player-driven world.
+A cyberpunk hacking MMO inspired by *Uplink*, *Mr. Robot*, and *EVE Online*. Hack servers, steal data, harvest resources, dock at Safe Houses, and claim sovereignty over the DarkNet in a persistent, player-driven world.
 
 ## 🚀 Quick Start
 
 ### Using Docker (Recommended)
-The easiest way to run the game server and client.
-
 ```bash
-# Build and start the container
 docker-compose up --build -d
-
-# View logs
-docker-compose logs -f
 ```
-
 Open **http://localhost:3000** in your browser.
 
 ### Manual Installation
-Requires Node.js v18+.
-
 ```bash
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
 ```
 
-## 🎮 Gameplay Features
+---
 
-### 🌐 The Grid
-The world is divided into three security zones:
-- **ClearNet (HighSec)**: Corporate-controlled, heavy AI security. Low risk, low reward.
-- **GreyNet (LowSec)**: The fringe. Faction warfare and open PvP.
-- **DarkNet (NullSec)**: Lawless deep web. Player sovereignty, highest rewards (Zero-Days, Quantum Cores).
+## 🎮 How to Play
 
-### 💻 Hacking & Systems
-- **Terminal Interface**: Type commands or use hotkeys/buttons.
-- **Real-time Intrusion**: Breach firewalls, crack passwords, and dodge active traces.
-- **Hardware & Software**: Upgrade your rig (CPU, RAM) and install tools (Icebreakers, Decryptors, Log Cleaners).
-- **Resources**: Harvest data packets, encryption keys, and rare exploits from compromised nodes.
+### Starting Out
+1. You spawn in **ClearNet** (safe zone) with basic hardware
+2. Type `tutorial` or `help` to learn commands
+3. Use `location` to see where you are
 
-### 🏢 Organizations & Sovereignty
-- **Crews**: Form small teams for cooperative hacking.
-- **Syndicates**: Massive organizations that can claim territory.
-- **Structures**: Deploy Control Nodes, Data Skyhooks, and Mining Rigs in the DarkNet.
-- **Siege Warfare**: Attack enemy structures to dismantle their control.
+### The Hacking Loop
+```
+1. SCAN    →  scan <ip>      Find targets
+2. CONNECT →  connect <ip>   Establish link (trace starts!)
+3. MOVE    →  move <node>    Navigate the network
+4. BREACH  →  breach         Break ICE protection
+5. CRACK   →  crack          Crack passwords
+6. LOOT    →  download/harvest  Steal files or resources
+7. CLEAN   →  clean          Erase your logs
+8. ESCAPE  →  disconnect     Exit before trace completes!
+```
 
-## ⌨️ Commands
+### Heat System 🔥
+Your **Heat** level determines how much attention you've attracted:
+
+| Heat | Status | Effects |
+|------|--------|---------|
+| 0-29 | Clean | No penalties |
+| 30-49 | Suspicious | Scans 1.5x slower |
+| 50-69 | Wanted | Auto-bounty on you |
+| 70-79 | Hunted | Hunter ICE spawns, faster traces |
+| 80+ | Federal | **Banned from ClearNet!** |
+
+Use `heat` to check your status. Heat decays slowly over time.
+
+### Safe Houses 🏠
+Dock at Safe Houses to store assets and swap hardware:
+- `dock` - Enter a Safe House (50 CR fee at NPC stations)
+- `hangar` - View stored rigs and resources
+- `store resources <type>` - Store resources
+- `retrieve resources <type>` - Take resources
+- `sethome` - Set respawn point
+- `undock` - Return to the Grid
+
+### Ghost Networks 👻
+Temporary high-value networks that appear randomly (like EVE wormholes):
+- **5x rewards**, guaranteed rare resources
+- 30min to 2hr lifetime before collapse
+- Must be in DarkNet to scan for them
+- No "local" - can't see other players inside!
+
+---
+
+## 🌐 Security Zones
+
+| Zone | Security | Risk | Reward |
+|------|----------|------|--------|
+| **ClearNet** | High (0.5-1.0) | Low - AI protection | 1x |
+| **GreyNet** | Medium (0.0-0.5) | Medium - PvP allowed | 1.5x |
+| **DarkNet** | Low (-1.0-0.0) | High - Lawless | 2x |
+| **Ghost** | Extreme | Very High | 5x |
+
+---
+
+## ⌨️ Command Reference
 
 ### Navigation
-- `scan <ip>` - Scan a target server for nodes and ICE
-- `connect <ip>` - Connect to a server
-- `disconnect` - Disconnect safely
-- `move <node>` - Move to an adjacent node inside a network
-- `location` - Show current sector and zone info
-- `map` - View the cluster map
-- `sectors` - List all available sectors
+| Command | Description |
+|---------|-------------|
+| `location` | Show current sector/zone |
+| `sectors` | List all sectors |
+| `explore` | List networks in cluster |
+| `navigate <id>` | Jump to network |
+| `map` | View cluster map |
 
-### Offense
-- `breach` - Break through ICE protection
-- `crack` - Crack password-protected nodes
-- `download <file>` - Steal files
-- `harvest` - Collect resources from nodes
-- `clean` - Erase logs to reduce Heat
+### Hacking
+| Command | Description |
+|---------|-------------|
+| `scan <ip>` | Scan target |
+| `connect <ip>` | Connect (starts trace) |
+| `move <node>` | Move to node |
+| `breach` | Break ICE |
+| `crack` | Crack password |
+| `download <file>` | Steal file |
+| `harvest` | Collect resources |
+| `clean` | Erase logs |
+| `cloak` | Activate proxy chain |
+| `abort` | Emergency disconnect |
+| `disconnect` | Safe disconnect |
 
-### Management
-- `status` - View player stats (Credits, Heat, Reputation)
-- `hardware` - View rig specifications
-- `software` - View installed programs
-- `resources` - View inventory
-- `crew` - Manage your organization (`create`, `invite`, `info`)
-- `sov` - Sovereignty management (`deploy`, `status`)
-- `siege` - Attack territory structures
+### Safe Houses
+| Command | Description |
+|---------|-------------|
+| `dock` | Dock at Safe House |
+| `undock` | Leave Safe House |
+| `hangar` | View storage |
+| `store resources <type> [amt]` | Store items |
+| `retrieve resources <type> [amt]` | Take items |
+| `sethome` | Set respawn point |
+
+### Info & Management
+| Command | Description |
+|---------|-------------|
+| `status` | Player stats |
+| `heat` | Detailed heat status |
+| `hardware` | Rig specs |
+| `software` | Installed programs |
+| `resources` | View inventory |
+| `contracts` | Available jobs |
+| `shop` | Black market |
+
+### Organizations
+| Command | Description |
+|---------|-------------|
+| `crew create <name>` | Create organization |
+| `crew invite <player>` | Invite player |
+| `crew info` | View org info |
+| `sov status` | Sovereignty info |
+| `sov deploy <type>` | Deploy structure |
+| `siege <structure>` | Attack structure |
+
+---
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: Vanilla JS, HTML5, CSS3 (Terminal UI + Canvas Visualization)
-- **Backend**: Node.js, Express, WebSocket (ws)
+- **Frontend**: Vanilla JS, HTML5, CSS3 (Terminal UI + Canvas)
+- **Backend**: Node.js, Express, WebSocket
 - **Containerization**: Docker, Docker Compose
-- **Architecture**: Event-driven, Server-authoritative state
+- **Architecture**: Event-driven, Server-authoritative
+
+---
 
 ## 📄 License
 
