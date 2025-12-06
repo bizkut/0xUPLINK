@@ -238,6 +238,12 @@ class App {
       case 'help':
         this.cmdHelp(args);
         break;
+      case 'register':
+        await this.cmdRegister(args);
+        break;
+      case 'login':
+        await this.cmdLogin(args);
+        break;
       case 'clear':
         this.terminal.clear();
         break;
@@ -459,6 +465,42 @@ class App {
     this.terminal.print('  software       - View programs', 'system');
     this.terminal.print('  contracts      - View jobs', 'system');
     this.terminal.print('  shop           - Black market', 'system');
+  }
+
+  cmdRegister(args) {
+    if (args.length < 2) {
+      this.terminal.print('Usage: register <username> <password>', 'error');
+      return;
+    }
+    const [username, password] = args;
+    this.terminal.print('Registering user...', 'system');
+
+    this.game.register(username, password).then(result => {
+      if (result.error) {
+        this.terminal.print(`Registration failed: ${result.error}`, 'error');
+      } else {
+        this.terminal.print(`Successfully registered as ${username}.`, 'success');
+        this.terminal.print('Initial save state created.', 'info');
+      }
+    });
+  }
+
+  cmdLogin(args) {
+    if (args.length < 2) {
+      this.terminal.print('Usage: login <username> <password>', 'error');
+      return;
+    }
+    const [username, password] = args;
+    this.terminal.print('Logging in...', 'system');
+
+    this.game.login(username, password).then(result => {
+      if (result.error) {
+        this.terminal.print(`Login failed: ${result.error}`, 'error');
+      } else {
+        this.terminal.print(`Welcome back, ${username}.`, 'success');
+        this.terminal.print('System state restored.', 'info');
+      }
+    });
   }
 
   cmdStatus() {

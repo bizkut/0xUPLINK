@@ -32,6 +32,13 @@ import {
   processCounterMeasures,
   getIntrusionInfo,
 } from '../shared/defender.js';
+import {
+  registerUser,
+  loginUser,
+  savePlayerState,
+  loadPlayerState
+} from './db.js';
+import { getRigById, getModuleById } from '../shared/computerModels.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -183,12 +190,15 @@ wss.on('connection', (ws) => {
     }
   });
 
-  ws.on('close', () => {
+  ws.on('close', async () => {
     console.log(`Player disconnected: ${playerId}`);
     const p = gameState.players.get(playerId);
     if (p) {
       p.online = false;
       // Keep server active for raids
+
+      // Save state (will transparently fail if guest not in profiles)
+      await savePlayerState(p.id, p);
     }
   });
 });
@@ -304,6 +314,12 @@ function handleMessage(player, message) {
       break;
     case 'CHOOSE_SPEC':
       handleChooseSpec(player, payload);
+      break;
+    case 'REGISTER':
+      handleRegister(player, payload);
+      break;
+    case 'LOGIN':
+      handleLogin(player, payload);
       break;
     default:
       console.log('Unknown message type:', type);
@@ -2280,6 +2296,179 @@ function startGhostSpawnLoop() {
       spawnGhostNetwork();
     }
   }, GHOST_NETWORK_CONFIG.spawnInterval * 1000);
+}
+
+// --- Auth Handlers ---
+
+async function handleRegister(player, { username, password }) {
+  console.log(`Registering user: ${username}`);
+  const result = await registerUser(username, password);
+
+  if (result.error) {
+    player.ws.send(JSON.stringify({ type: 'REGISTER_RESULT', payload: { error: result.error } }));
+    return;
+  }
+
+  // Update player ID and persist
+  // We need to careful not to break the active socket reference in the map
+  const oldId = player.id;
+  const newId = result.user.id;
+
+  if (gameState.players.has(newId)) {
+    // Already online?
+    // For MVP, just error out "Already logged in" or kick logic
+    // We'll kick the old session just in case
+    const p = gameState.players.get(newId);
+    if (p && p.ws !== player.ws) {
+      p.ws.close();
+    }
+  }
+
+  gameState.players.delete(oldId);
+  player.id = newId;
+  gameState.players.set(newId, player);
+
+  // Persist the current "starter" state to the fresh account
+  await savePlayerState(newId, player);
+
+  player.ws.send(JSON.stringify({ type: 'REGISTER_RESULT', payload: { success: true, username } }));
+}
+
+async function handleLogin(player, { username, password }) {
+  console.log(`Logging in user: ${username}`);
+  const result = await loginUser(username, password);
+
+  if (result.error) {
+    player.ws.send(JSON.stringify({ type: 'LOGIN_RESULT', payload: { error: result.error } }));
+    return;
+  }
+
+  const userId = result.user.id;
+
+  // Load state
+  const savedState = await loadPlayerState(userId);
+  if (!savedState || !savedState.stats) {
+    player.ws.send(JSON.stringify({ type: 'LOGIN_RESULT', payload: { error: 'Save data not found or corruption' } }));
+    return;
+  }
+
+  // Handle session cleanup if already online
+  if (gameState.players.has(userId) && gameState.players.get(userId) !== player) {
+    const p = gameState.players.get(userId);
+    p.ws.close(); // Kick old session
+    gameState.players.delete(userId);
+  }
+
+  const oldId = player.id;
+  gameState.players.delete(oldId);
+
+  // Apply saved state to current player object
+  player.id = userId;
+  player.credits = savedState.stats.credits;
+  player.reputation = savedState.stats.reputation;
+  player.heat = savedState.stats.heat;
+  player.homeSafeHouse = savedState.stats.home_safehouse_id;
+  player.rigIntegrity = savedState.stats.rig_integrity;
+
+  // Restore Rig
+  const rigClassId = savedState.stats.current_rig_class;
+  const rigClass = getRigById(rigClassId);
+
+  // Re-calculate hardware
+  // We need a helper for this ideally, but let's inline for MVP
+  // Assume basic logic from game.js constructor but hydrated
+  player.hardware = {
+    tier: rigClass.tier,
+    name: rigClass.name,
+    cpu: rigClass.baseCpu,
+    ram: rigClass.baseRam,
+    bandwidth: rigClass.baseBandwidth,
+    traceResist: (rigClass.bonuses.traceResist - 1) * 100,
+    cpuUsed: 0,
+    ramUsed: 0,
+    integrity: player.rigIntegrity,
+  };
+
+  // Restore modules
+  player.rig = {
+    class: rigClass,
+    equippedModules: { core: [], memory: [], expansion: [] }
+  };
+
+  // Hydrate modules from IDs
+  // savedState.equippedModules is { core: ['id', ...], ... }
+  // We need to fetch module objects
+  Object.keys(savedState.equippedModules).forEach(slot => {
+    savedState.equippedModules[slot].forEach(modId => {
+      const mod = getModuleById(slot, modId);
+      if (mod) player.rig.equippedModules[slot].push(mod);
+    });
+  });
+
+  // Restore resources
+  player.resources = savedState.resources;
+
+  // Restore local storage
+  // Can't easily restore file content without sending it all to client?
+  // Client expects `player.files` on `server` object? No, `localStorage` is implemented on CLIENT side mostly?
+  // Wait, `game.js` on client has `player.localStorage`.
+  // Server `player` object currently doesn't track `localStorage` files structure in `server/index.js` player object?
+  // Let's check `server/index.js` `player` object definition (lines 114-146).
+  // It has `files: []` (legacy?) but `localStorage` logic was client-side?
+  // If `localStorage` is client-side, server doesn't know about it unless we send it.
+  // BUT the persistence requirement means server MUST store it.
+  // So server needs to send `localStorage` data in `INIT` or separate message.
+  // Currently `handleLogin` doesn't re-send `INIT`. It should.
+
+  gameState.players.set(userId, player);
+
+  const startingNetwork = gameState.universe.networks[player.location.networkId];
+
+  // Re-send INIT with full hydrated state
+  // We need to modify the INIT payload to include localStorage files if we want them persisted.
+  // For now, let's just get stats working. Files are secondary (but planned).
+
+  player.ws.send(JSON.stringify({
+    type: 'LOGIN_RESULT',
+    payload: { success: true, username }
+  }));
+
+  // Re-send INIT
+  player.ws.send(JSON.stringify({
+    type: 'INIT',
+    payload: {
+      playerId: player.id,
+      ip: player.ip,
+      credits: player.credits,
+      server: player.server,
+      location: player.location,
+      resources: player.resources,
+      // We need to send Rig/Modules too? Client usually tracks its own hardware if server confirms it.
+      // But `INIT` in client `game.js` overwrites `this.state.player`...
+      // We need to verify what `INIT` handles.
+      currentNetwork: {
+        id: startingNetwork.id,
+        // ... (simplified re-send)
+        ip: startingNetwork.ip,
+        owner: startingNetwork.owner,
+        security: startingNetwork.security,
+        zone: startingNetwork.zone,
+        zoneName: startingNetwork.zoneName,
+        zoneColor: startingNetwork.zoneColor,
+      },
+      universe: {
+        sectors: Object.keys(gameState.universe.sectors),
+        totalNetworks: gameState.universe.totalNetworks,
+      },
+      // Extra data for hydration
+      persistedState: {
+        reputation: player.reputation,
+        heat: player.heat,
+        rig: player.rig, // Client needs to handle this
+        localStorage: savedState.localFiles // Client needs to handle this
+      }
+    },
+  }));
 }
 
 // Start server

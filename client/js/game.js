@@ -140,7 +140,29 @@ export class Game {
         if (payload.resources) {
           this.state.player.resources = payload.resources;
         }
+
+        // Handle persisted state
+        if (payload.persistedState) {
+          this.state.player.reputation = payload.persistedState.reputation || 0;
+          this.state.player.heat = payload.persistedState.heat || 0;
+
+          if (payload.persistedState.rig) {
+            this.state.player.rig = payload.persistedState.rig;
+            this.recalculateHardware();
+          }
+
+          if (payload.persistedState.localStorage) {
+            this.state.player.localStorage.files = payload.persistedState.localStorage;
+            this.updateStorageCapacity();
+          }
+        }
         console.log('[Game] Initialized with ID:', payload.playerId);
+        break;
+      case 'REGISTER_RESULT':
+        window.dispatchEvent(new CustomEvent('register-result', { detail: payload }));
+        break;
+      case 'LOGIN_RESULT':
+        window.dispatchEvent(new CustomEvent('login-result', { detail: payload }));
         break;
       case 'INTRUSION_ALERT':
         console.log('[Game] Intrusion from:', payload.attackerIp);
@@ -165,6 +187,42 @@ export class Game {
    * Send a message to the server and wait for response
    * Server connection is REQUIRED - no offline mode
    */
+  async register(username, password) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return { error: 'Not connected' };
+
+    return new Promise((resolve) => {
+      const handler = (e) => {
+        window.removeEventListener('register-result', handler);
+        resolve(e.detail);
+      };
+      setTimeout(() => {
+        window.removeEventListener('register-result', handler);
+        resolve({ error: 'Timeout' });
+      }, 5000);
+
+      window.addEventListener('register-result', handler);
+      this.ws.send(JSON.stringify({ type: 'REGISTER', payload: { username, password } }));
+    });
+  }
+
+  async login(username, password) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return { error: 'Not connected' };
+
+    return new Promise((resolve) => {
+      const handler = (e) => {
+        window.removeEventListener('login-result', handler);
+        resolve(e.detail);
+      };
+      setTimeout(() => {
+        window.removeEventListener('login-result', handler);
+        resolve({ error: 'Timeout. Server might be offline.' });
+      }, 5000);
+
+      window.addEventListener('login-result', handler);
+      this.ws.send(JSON.stringify({ type: 'LOGIN', payload: { username, password } }));
+    });
+  }
+
   async sendMessage(type, payload = {}) {
     // Server connection is required
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
