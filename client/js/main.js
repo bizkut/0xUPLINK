@@ -55,8 +55,58 @@ class App {
   }
 
   updateSidebarStatus() {
-    // Update rig
-    this.ui.updateRigStatus(this.game.state.player?.rigIntegrity || 100);
+    // Update rig display
+    const rigInfo = this.game.getRigInfo();
+    const rig = rigInfo.class;
+    const hw = this.game.state.player.hardware;
+
+    // Rig name and specialty
+    const rigNameEl = document.getElementById('rig-name');
+    const rigSpecialtyEl = document.getElementById('rig-specialty');
+    if (rigNameEl) rigNameEl.textContent = rig.name;
+    if (rigSpecialtyEl) rigSpecialtyEl.textContent = rig.specialty;
+
+    // Stats
+    const rigCpuEl = document.getElementById('rig-cpu');
+    const rigRamEl = document.getElementById('rig-ram');
+    const rigBwEl = document.getElementById('rig-bw');
+    const rigTraceEl = document.getElementById('rig-trace');
+    if (rigCpuEl) rigCpuEl.textContent = `${hw.cpuUsed}/${hw.cpu}`;
+    if (rigRamEl) rigRamEl.textContent = `${hw.ramUsed}/${hw.ram}`;
+    if (rigBwEl) rigBwEl.textContent = hw.bandwidth;
+    if (rigTraceEl) rigTraceEl.textContent = `${hw.traceResist}%`;
+
+    // Slots
+    const slotCoreEl = document.getElementById('slot-core');
+    const slotMemEl = document.getElementById('slot-memory');
+    const slotExpEl = document.getElementById('slot-expansion');
+    if (slotCoreEl) slotCoreEl.textContent = `${rigInfo.slots.core.used}/${rigInfo.slots.core.max}`;
+    if (slotMemEl) slotMemEl.textContent = `${rigInfo.slots.memory.used}/${rigInfo.slots.memory.max}`;
+    if (slotExpEl) slotExpEl.textContent = `${rigInfo.slots.expansion.used}/${rigInfo.slots.expansion.max}`;
+
+    // Equipped modules
+    const modulesEl = document.getElementById('rig-modules');
+    if (modulesEl) {
+      modulesEl.innerHTML = '';
+      const allMods = [
+        ...rigInfo.equippedModules.core,
+        ...rigInfo.equippedModules.memory,
+        ...rigInfo.equippedModules.expansion,
+      ];
+      if (allMods.length === 0) {
+        modulesEl.innerHTML = '<div class="rig-module-item" style="color:var(--text-dim)">No modules fitted</div>';
+      } else {
+        for (const mod of allMods) {
+          const modEl = document.createElement('div');
+          modEl.className = 'rig-module-item';
+          modEl.textContent = mod.name;
+          modulesEl.appendChild(modEl);
+        }
+      }
+    }
+
+    // Update integrity
+    this.ui.updateRigStatus(this.game.state.player?.hardware?.integrity || 100);
 
     // Update resources
     this.ui.updateResources(this.game.state.player?.resources || {});

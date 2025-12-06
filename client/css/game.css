@@ -581,6 +581,95 @@
   text-transform: uppercase;
 }
 
+/* Rig/Computer Display */
+.rig-info {
+  margin-bottom: 10px;
+}
+
+.rig-name {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--accent-amber);
+  text-transform: uppercase;
+}
+
+.rig-specialty {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.rig-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.stat-mini {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+}
+
+.stat-mini .stat-icon {
+  font-size: 10px;
+}
+
+.stat-mini .stat-label {
+  color: var(--text-dim);
+  min-width: 32px;
+}
+
+.stat-mini .stat-val {
+  color: var(--text-primary);
+  font-weight: bold;
+}
+
+.rig-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  padding: 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+}
+
+.slot-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+}
+
+.slot-label {
+  color: var(--text-dim);
+}
+
+.slot-val {
+  color: var(--accent-blue);
+  font-weight: bold;
+}
+
+.rig-modules {
+  margin-bottom: 8px;
+}
+
+.rig-module-item {
+  font-size: 9px;
+  color: var(--text-secondary);
+  padding: 2px 4px;
+  margin: 2px 0;
+  background: var(--bg-tertiary);
+  border-left: 2px solid var(--accent-blue);
+}
+
+.integrity-row {
+  margin-top: 8px;
+}
+
 /* Stat rows with bars */
 .stat-row {
   display: flex;

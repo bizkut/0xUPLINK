@@ -95,10 +95,35 @@
 
       <!-- Far Right Panel: Status & Quick Actions -->
       <aside id="status-sidebar">
-        <!-- Rig Status -->
+        <!-- Computer/Rig Status -->
         <div class="sidebar-section" id="rig-section">
-          <div class="sidebar-header">⚡ RIG STATUS</div>
-          <div class="stat-row">
+          <div class="sidebar-header">💻 COMPUTER</div>
+          <div class="rig-info">
+            <div class="rig-name" id="rig-name">Burner</div>
+            <div class="rig-specialty" id="rig-specialty">Starter Rig</div>
+          </div>
+          <div class="rig-stats">
+            <div class="stat-mini"><span class="stat-icon">🔲</span><span class="stat-label">CPU</span><span
+                class="stat-val" id="rig-cpu">0/2</span></div>
+            <div class="stat-mini"><span class="stat-icon">💾</span><span class="stat-label">RAM</span><span
+                class="stat-val" id="rig-ram">0/64</span></div>
+            <div class="stat-mini"><span class="stat-icon">📡</span><span class="stat-label">BW</span><span
+                class="stat-val" id="rig-bw">50</span></div>
+            <div class="stat-mini"><span class="stat-icon">🛡️</span><span class="stat-label">Trace</span><span
+                class="stat-val" id="rig-trace">0%</span></div>
+          </div>
+          <div class="rig-slots">
+            <div class="slot-row"><span class="slot-label">Core:</span><span class="slot-val" id="slot-core">0/1</span>
+            </div>
+            <div class="slot-row"><span class="slot-label">Memory:</span><span class="slot-val"
+                id="slot-memory">0/1</span></div>
+            <div class="slot-row"><span class="slot-label">Expansion:</span><span class="slot-val"
+                id="slot-expansion">0/1</span></div>
+          </div>
+          <div class="rig-modules" id="rig-modules">
+            <!-- Equipped modules will be listed here -->
+          </div>
+          <div class="stat-row integrity-row">
             <span class="stat-label">Integrity</span>
             <div class="stat-bar-container">
               <div class="stat-bar" id="rig-bar">
