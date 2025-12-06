@@ -3,6 +3,7 @@ import { Game } from './game.js';
 import { NodeMap } from './nodeMap.js';
 import { UI } from './ui.js';
 import { MarketUI } from './market.js';
+import { ContractUI } from './contracts.js';
 import { SECTORS, SECURITY_ZONES, SOVEREIGNTY_STRUCTURES, HEAT_THRESHOLDS } from '../../shared/constants.js';
 
 class App {
@@ -39,6 +40,9 @@ class App {
 
     // Initialize Market UI
     this.marketUI = new MarketUI(this.game);
+
+    // Initialize Contract UI
+    this.contractUI = new ContractUI(this.game);
 
     // Display welcome message (will be shown after login)
 
@@ -1041,23 +1045,14 @@ class App {
   }
 
   cmdContracts() {
-    const contracts = this.game.getAvailableContracts();
-    this.terminal.print('=== AVAILABLE CONTRACTS ===', 'info');
-
-    if (contracts.length === 0) {
-      this.terminal.print('No contracts available. Check back later.', 'system');
+    // Open interactive contract board UI
+    if (this.contractUI) {
+      this.contractUI.open();
       return;
     }
 
-    contracts.forEach(c => {
-      this.terminal.print('', '');
-      this.terminal.print(`[${c.id}] ${c.title}`, 'warning');
-      this.terminal.print(`  Type: ${c.type}`, 'system');
-      this.terminal.print(`  Target: ${c.targetIp}`, 'system');
-      this.terminal.print(`  Reward: ${c.reward} CR`, 'success');
-      this.terminal.print(`  Difficulty: ${c.difficulty}`,
-        c.difficulty === 'HARD' ? 'error' : c.difficulty === 'MEDIUM' ? 'warning' : 'system');
-    });
+    // Fallback to terminal
+    this.terminal.print('Contract board not available.', 'error');
   }
 
   cmdShop() {

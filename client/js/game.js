@@ -194,6 +194,18 @@ export class Game {
       case 'MARKET_MODIFY_RESULT':
         window.dispatchEvent(new CustomEvent('market-modify-result', { detail: payload }));
         break;
+      case 'CONTRACT_LIST_RESULT':
+        window.dispatchEvent(new CustomEvent('contract-list-result', { detail: payload }));
+        break;
+      case 'CONTRACT_CREATE_RESULT':
+        window.dispatchEvent(new CustomEvent('contract-create-result', { detail: payload }));
+        break;
+      case 'CONTRACT_ACCEPT_RESULT':
+        window.dispatchEvent(new CustomEvent('contract-accept-result', { detail: payload }));
+        break;
+      case 'CONTRACT_CANCEL_RESULT':
+        window.dispatchEvent(new CustomEvent('contract-cancel-result', { detail: payload }));
+        break;
       case 'PLAYER_COUNT':
         window.dispatchEvent(new CustomEvent('player-count', { detail: payload }));
         break;

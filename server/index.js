@@ -15,7 +15,7 @@ import {
   isGhostExpired,
   getGhostTimeRemaining,
 } from '../shared/universe.js';
-import { SECURITY_ZONES, SECTORS, FACTIONS, GHOST_NETWORK_CONFIG, SAFE_HOUSE_TYPES, COUNTER_PROGRAMS, INTRUSION_CONFIG, MARKET_CONFIG, TRADEABLE_RESOURCES, DEATH_CONFIG, CHAT_CONFIG, REPUTATION_CONFIG, SPECIALIZATION_CONFIG } from '../shared/constants.js';
+import { SECURITY_ZONES, SECTORS, FACTIONS, GHOST_NETWORK_CONFIG, SAFE_HOUSE_TYPES, COUNTER_PROGRAMS, INTRUSION_CONFIG, MARKET_CONFIG, TRADEABLE_RESOURCES, DEATH_CONFIG, CHAT_CONFIG, REPUTATION_CONFIG, SPECIALIZATION_CONFIG, CONTRACT_TYPES, CONTRACT_CONFIG } from '../shared/constants.js';
 import {
   generateNPCSafeHouse,
   findSafeHouseAtNetwork,
@@ -58,7 +58,7 @@ const gameState = {
   intrusions: new Map(), // Active intrusions { networkId -> [intrusions] }
   lockedNetworks: new Map(), // Networks in lockdown { networkId -> unlockTime }
   marketOrders: new Map(), // Player market orders { orderId -> order }
-  contracts: [],
+  contracts: new Map(), // Player contracts { contractId -> contract }
   factions: {
     syndicate: { members: [], treasury: 0 },
     ghost: { members: [], treasury: 0 },
@@ -313,6 +313,18 @@ function handleMessage(player, message) {
       break;
     case 'MARKET_MODIFY':
       handleMarketModify(player, payload);
+      break;
+    case 'CONTRACT_LIST':
+      handleContractList(player, payload);
+      break;
+    case 'CONTRACT_CREATE':
+      handleContractCreate(player, payload);
+      break;
+    case 'CONTRACT_ACCEPT':
+      handleContractAccept(player, payload);
+      break;
+    case 'CONTRACT_CANCEL':
+      handleContractCancel(player, payload);
       break;
     case 'REPAIR':
       handleRepair(player);
@@ -918,6 +930,7 @@ seedNpcMarket(); // Seed NPC market with computer and module orders
 startGhostSpawnLoop(); // Start periodic ghost spawning
 startIntrusionProcessingLoop(); // Process intrusions and alerts
 startMarketCleanupLoop(); // Clean expired market orders
+startContractCleanupLoop(); // Clean expired contracts
 
 // Seed NPC Market Orders (async - loads from DB or seeds new)
 async function seedNpcMarket() {
@@ -1732,6 +1745,249 @@ function startMarketCleanupLoop() {
         }
         gameState.marketOrders.delete(id);
         console.log(`[MARKET] Order ${id} expired`);
+      }
+    }
+  }, 300000); // 5 minutes
+}
+
+// ============== CONTRACT HANDLERS ==============
+
+function handleContractList(player, { filter }) {
+  const now = Date.now();
+  const contracts = [];
+  const myContracts = [];
+
+  for (const [id, contract] of gameState.contracts) {
+    // Skip expired
+    if (contract.expiresAt <= now) continue;
+
+    const contractData = {
+      id: contract.id,
+      type: contract.type,
+      typeName: CONTRACT_TYPES[contract.type.toUpperCase()]?.name || contract.type,
+      icon: CONTRACT_TYPES[contract.type.toUpperCase()]?.icon || '📋',
+      description: contract.description,
+      reward: contract.reward,
+      issuerId: contract.issuerId,
+      issuerName: contract.issuerId === player.id ? 'You' : 'Anonymous',
+      assigneeId: contract.assigneeId,
+      status: contract.status,
+      expiresIn: Math.floor((contract.expiresAt - now) / 60000), // minutes
+      createdAt: contract.createdAt,
+    };
+
+    // My contracts (created or accepted)
+    if (contract.issuerId === player.id || contract.assigneeId === player.id) {
+      myContracts.push(contractData);
+    }
+
+    // Available contracts (open, not mine)
+    if (contract.status === 'open' && contract.issuerId !== player.id) {
+      contracts.push(contractData);
+    }
+  }
+
+  player.ws.send(JSON.stringify({
+    type: 'CONTRACT_LIST_RESULT',
+    payload: { contracts, myContracts },
+  }));
+}
+
+function handleContractCreate(player, { type, description, reward, targetId, targetNetwork, duration }) {
+  const contractType = CONTRACT_TYPES[type.toUpperCase()];
+
+  if (!contractType) {
+    player.ws.send(JSON.stringify({
+      type: 'CONTRACT_CREATE_RESULT',
+      payload: { error: `Invalid contract type: ${type}` },
+    }));
+    return;
+  }
+
+  // Validate reward
+  if (reward < contractType.minReward || reward > contractType.maxReward) {
+    player.ws.send(JSON.stringify({
+      type: 'CONTRACT_CREATE_RESULT',
+      payload: { error: `Reward must be between ${contractType.minReward} and ${contractType.maxReward} CR.` },
+    }));
+    return;
+  }
+
+  // Calculate total cost (collateral + fee)
+  const collateral = Math.floor(reward * CONTRACT_CONFIG.collateralMultiplier);
+  const totalCost = collateral + CONTRACT_CONFIG.creationFee;
+
+  if (player.credits < totalCost) {
+    player.ws.send(JSON.stringify({
+      type: 'CONTRACT_CREATE_RESULT',
+      payload: { error: `Insufficient credits. Need ${totalCost} CR (${collateral} collateral + ${CONTRACT_CONFIG.creationFee} fee).` },
+    }));
+    return;
+  }
+
+  // Check max active contracts
+  const playerContracts = Array.from(gameState.contracts.values()).filter(c => c.issuerId === player.id && c.status === 'open');
+  if (playerContracts.length >= CONTRACT_CONFIG.maxActiveContracts) {
+    player.ws.send(JSON.stringify({
+      type: 'CONTRACT_CREATE_RESULT',
+      payload: { error: `Max active contracts reached (${CONTRACT_CONFIG.maxActiveContracts}).` },
+    }));
+    return;
+  }
+
+  // Calculate expiry
+  const contractDuration = duration || contractType.duration;
+  const expiresAt = Date.now() + Math.min(Math.max(contractDuration, CONTRACT_CONFIG.minDuration), CONTRACT_CONFIG.maxDuration);
+
+  // Create contract
+  const contractId = `contract_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  const contract = {
+    id: contractId,
+    type: contractType.id,
+    description: description || contractType.description,
+    reward,
+    collateral,
+    issuerId: player.id,
+    assigneeId: null,
+    targetId: targetId || null,      // For bounties
+    targetNetwork: targetNetwork || null, // For data theft
+    status: 'open', // open, accepted, completed, cancelled, expired
+    createdAt: Date.now(),
+    expiresAt,
+    acceptedAt: null,
+  };
+
+  // Deduct credits
+  player.credits -= totalCost;
+
+  gameState.contracts.set(contractId, contract);
+
+  player.ws.send(JSON.stringify({
+    type: 'CONTRACT_CREATE_RESULT',
+    payload: {
+      success: true,
+      contractId,
+      reward,
+      collateral,
+      fee: CONTRACT_CONFIG.creationFee,
+      credits: player.credits,
+    },
+  }));
+
+  console.log(`[CONTRACT] Created: ${contractId} (${contractType.name}) by ${player.ip}`);
+}
+
+function handleContractAccept(player, { contractId }) {
+  const contract = gameState.contracts.get(contractId);
+
+  if (!contract) {
+    player.ws.send(JSON.stringify({
+      type: 'CONTRACT_ACCEPT_RESULT',
+      payload: { error: 'Contract not found.' },
+    }));
+    return;
+  }
+
+  if (contract.status !== 'open') {
+    player.ws.send(JSON.stringify({
+      type: 'CONTRACT_ACCEPT_RESULT',
+      payload: { error: 'Contract is no longer available.' },
+    }));
+    return;
+  }
+
+  if (contract.issuerId === player.id) {
+    player.ws.send(JSON.stringify({
+      type: 'CONTRACT_ACCEPT_RESULT',
+      payload: { error: 'Cannot accept your own contract.' },
+    }));
+    return;
+  }
+
+  // Accept contract
+  contract.assigneeId = player.id;
+  contract.status = 'accepted';
+  contract.acceptedAt = Date.now();
+
+  player.ws.send(JSON.stringify({
+    type: 'CONTRACT_ACCEPT_RESULT',
+    payload: {
+      success: true,
+      contractId,
+      type: contract.type,
+      reward: contract.reward,
+      expiresIn: Math.floor((contract.expiresAt - Date.now()) / 60000),
+    },
+  }));
+
+  // Notify issuer if online
+  const issuer = gameState.players.get(contract.issuerId);
+  if (issuer && issuer.online) {
+    issuer.ws.send(JSON.stringify({
+      type: 'CONTRACT_ACCEPTED_NOTIFICATION',
+      payload: { contractId, assignee: 'Anonymous' },
+    }));
+  }
+
+  console.log(`[CONTRACT] Accepted: ${contractId} by ${player.ip}`);
+}
+
+function handleContractCancel(player, { contractId }) {
+  const contract = gameState.contracts.get(contractId);
+
+  if (!contract || contract.issuerId !== player.id) {
+    player.ws.send(JSON.stringify({
+      type: 'CONTRACT_CANCEL_RESULT',
+      payload: { error: 'Contract not found or not yours.' },
+    }));
+    return;
+  }
+
+  if (contract.status !== 'open') {
+    player.ws.send(JSON.stringify({
+      type: 'CONTRACT_CANCEL_RESULT',
+      payload: { error: 'Can only cancel open contracts.' },
+    }));
+    return;
+  }
+
+  // Refund collateral (but not creation fee)
+  player.credits += contract.collateral;
+
+  gameState.contracts.delete(contractId);
+
+  player.ws.send(JSON.stringify({
+    type: 'CONTRACT_CANCEL_RESULT',
+    payload: {
+      success: true,
+      contractId,
+      refunded: contract.collateral,
+      credits: player.credits,
+    },
+  }));
+
+  console.log(`[CONTRACT] Cancelled: ${contractId} by ${player.ip}`);
+}
+
+// Contract cleanup loop (expired contracts)
+function startContractCleanupLoop() {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, contract] of gameState.contracts) {
+      if (contract.expiresAt <= now && contract.status !== 'completed') {
+        // Return collateral to issuer
+        const issuer = gameState.players.get(contract.issuerId);
+        if (issuer) {
+          issuer.credits += contract.collateral;
+          if (issuer.online) {
+            issuer.ws.send(JSON.stringify({
+              type: 'CONTRACT_EXPIRED',
+              payload: { contractId: id, refunded: contract.collateral },
+            }));
+          }
+        }
+        gameState.contracts.delete(id);
+        console.log(`[CONTRACT] Expired: ${id}`);
       }
     }
   }, 300000); // 5 minutes

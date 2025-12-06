@@ -472,6 +472,59 @@ export const TRADEABLE_RESOURCES = [
   'quantum_cores',
 ];
 
+// Contract Types (Player-created job board)
+export const CONTRACT_TYPES = {
+  BOUNTY: {
+    id: 'bounty',
+    name: 'Bounty',
+    description: 'Trace target player. Reward on successful trace.',
+    minReward: 100,
+    maxReward: 50000,
+    duration: 86400000, // 24hrs
+    completionCheck: 'trace_player',
+    icon: '🎯',
+  },
+  DATA_THEFT: {
+    id: 'data_theft',
+    name: 'Data Theft',
+    description: 'Steal specific file from target network.',
+    minReward: 200,
+    maxReward: 10000,
+    duration: 172800000, // 48hrs
+    completionCheck: 'steal_file',
+    icon: '📁',
+  },
+  DEFENSE: {
+    id: 'defense',
+    name: 'Network Defense',
+    description: 'Protect issuer network from breach.',
+    minReward: 500,
+    maxReward: 5000,
+    duration: 3600000, // 1hr active defense
+    completionCheck: 'defense_success',
+    icon: '🛡️',
+  },
+  DELIVERY: {
+    id: 'delivery',
+    name: 'Courier',
+    description: 'Transport item between safe houses.',
+    minReward: 50,
+    maxReward: 2000,
+    duration: 86400000, // 24hrs
+    completionCheck: 'delivery_complete',
+    icon: '📦',
+  },
+};
+
+export const CONTRACT_CONFIG = {
+  creationFee: 50,            // CR to post contract
+  maxActiveContracts: 5,      // Max contracts per player
+  collateralMultiplier: 1.2,  // Issuer escrows 120% of reward
+  minDuration: 3600000,       // 1hr minimum
+  maxDuration: 604800000,     // 7 days maximum
+};
+
+
 // Death/Loss Consequences
 export const DEATH_CONFIG = {
   // When traced (caught)

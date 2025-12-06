@@ -192,7 +192,13 @@
   - Counter-programs: Backtrace (500 CR), Counter-ICE (1000 CR), Lockdown (2000 CR)
 - [ ] Ghost Networks (temporary high-value "wormhole" zones)
 - [ ] Insurance/backup system for hardware
-- [ ] Contract marketplace (player-created)
+- [x] **Contract Marketplace** (Completed 2025-12-07)
+  - Eve Online-style player-created contracts
+  - 4 contract types: Bounty (🎯), Data Theft (📁), Defense (🛡️), Courier (📦)
+  - Server handlers: CONTRACT_CREATE, CONTRACT_LIST, CONTRACT_ACCEPT, CONTRACT_CANCEL
+  - Modal UI with Available, My Contracts, Create Contract tabs
+  - 120% collateral escrow, 50 CR creation fee
+  - Automatic expiry cleanup loop
 - [x] **Player Market Economy** (Completed 2025-12-06)
   - Added `MARKET_CONFIG` and `TRADEABLE_RESOURCES` to `constants.js`
   - Server handlers: MARKET_LIST, MARKET_SELL, MARKET_BUY, MARKET_CANCEL, MARKET_MODIFY
