@@ -164,6 +164,11 @@ export class Game {
       case 'LOGIN_RESULT':
         window.dispatchEvent(new CustomEvent('login-result', { detail: payload }));
         break;
+      case 'SESSION_KICKED':
+        // Another login detected - show alert and reload
+        alert(payload.reason || 'Your session was ended by another login.');
+        window.location.reload();
+        break;
       case 'INTRUSION_ALERT':
         console.log('[Game] Intrusion from:', payload.attackerIp);
         window.dispatchEvent(new CustomEvent('intrusion-alert', { detail: payload }));

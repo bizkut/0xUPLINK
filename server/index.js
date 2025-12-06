@@ -65,6 +65,7 @@ const gameState = {
     chaos: { members: [], treasury: 0 },
   },
   organizations: new Map(), // Player-created orgs
+  authenticatedSessions: new Map(), // Map of authenticated userId -> playerId (for single session enforcement)
 };
 
 // Serve static files
@@ -206,6 +207,11 @@ wss.on('connection', (ws) => {
     if (p) {
       p.online = false;
       // Keep server active for raids
+
+      // Clean up authenticated session tracking
+      if (p.authenticatedUserId) {
+        gameState.authenticatedSessions.delete(p.authenticatedUserId);
+      }
 
       // Save state (will transparently fail if guest not in profiles)
       await savePlayerState(p.id, p);
@@ -2319,24 +2325,29 @@ async function handleRegister(player, { username, password }) {
     return;
   }
 
-  // Update player ID and persist
-  // We need to careful not to break the active socket reference in the map
   const oldId = player.id;
   const newId = result.user.id;
 
-  if (gameState.players.has(newId)) {
-    // Already online?
-    // For MVP, just error out "Already logged in" or kick logic
-    // We'll kick the old session just in case
-    const p = gameState.players.get(newId);
-    if (p && p.ws !== player.ws) {
-      p.ws.close();
+  // Check if this user is already logged in elsewhere (should be rare for new registration)
+  if (gameState.authenticatedSessions.has(newId)) {
+    const existingPlayerId = gameState.authenticatedSessions.get(newId);
+    const existingPlayer = gameState.players.get(existingPlayerId);
+    if (existingPlayer && existingPlayer.ws !== player.ws) {
+      // Notify old session before kicking
+      existingPlayer.ws.send(JSON.stringify({
+        type: 'SESSION_KICKED',
+        payload: { reason: 'You have been logged in from another location.' }
+      }));
+      existingPlayer.ws.close();
+      gameState.players.delete(existingPlayerId);
     }
   }
 
   gameState.players.delete(oldId);
   player.id = newId;
+  player.authenticatedUserId = newId; // Mark this player as authenticated
   gameState.players.set(newId, player);
+  gameState.authenticatedSessions.set(newId, newId); // Track session
 
   // Persist the current "starter" state to the fresh account
   await savePlayerState(newId, player);
@@ -2362,11 +2373,19 @@ async function handleLogin(player, { username, password }) {
     return;
   }
 
-  // Handle session cleanup if already online
-  if (gameState.players.has(userId) && gameState.players.get(userId) !== player) {
-    const p = gameState.players.get(userId);
-    p.ws.close(); // Kick old session
-    gameState.players.delete(userId);
+  // Handle session cleanup if already online (single session enforcement)
+  if (gameState.authenticatedSessions.has(userId)) {
+    const existingPlayerId = gameState.authenticatedSessions.get(userId);
+    const existingPlayer = gameState.players.get(existingPlayerId);
+    if (existingPlayer && existingPlayer.ws !== player.ws) {
+      // Notify old session before kicking
+      existingPlayer.ws.send(JSON.stringify({
+        type: 'SESSION_KICKED',
+        payload: { reason: 'You have been logged in from another location.' }
+      }));
+      existingPlayer.ws.close();
+      gameState.players.delete(existingPlayerId);
+    }
   }
 
   const oldId = player.id;
@@ -2374,6 +2393,10 @@ async function handleLogin(player, { username, password }) {
 
   // Apply saved state to current player object
   player.id = userId;
+  player.authenticatedUserId = userId; // Mark as authenticated
+  gameState.players.set(userId, player);
+  gameState.authenticatedSessions.set(userId, userId); // Track session
+
   player.credits = savedState.stats.credits;
   player.reputation = savedState.stats.reputation;
   player.heat = savedState.stats.heat;
