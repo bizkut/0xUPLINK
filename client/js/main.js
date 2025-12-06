@@ -27,7 +27,7 @@ class App {
   async init() {
     // Initialize components
     this.ui.init();
-    this.terminal.init(this.handleCommand.bind(this));
+    this.terminal.init(this.handleCommand.bind(this), this.getFilesSuggestions.bind(this));
     this.nodeMap.init();
 
     // Connect to server
@@ -151,6 +151,21 @@ class App {
     if (heat >= 40) return 'hot';
     if (heat >= 20) return 'warm';
     return 'clean';
+  }
+
+  // Get files for autocomplete based on current context
+  getFilesSuggestions(cmd) {
+    // If connected, return remote files (for download command)
+    if (this.game.state.connection.active) {
+      const currentNode = this.game.getCurrentNode();
+      if (currentNode && currentNode.files) {
+        return currentNode.files;
+      }
+      return [];
+    }
+
+    // If not connected, return local files (for cat, rm)
+    return this.game.getLocalFiles();
   }
 
   showWelcome() {

@@ -6,16 +6,18 @@ export class Terminal {
     this.input = null;
     this.autocomplete = null;
     this.commandHandler = null;
+    this.fileProvider = null; // Callback to get file suggestions
     this.history = [];
     this.historyIndex = -1;
     this.selectedAutocomplete = 0;
   }
 
-  init(commandHandler) {
+  init(commandHandler, fileProvider = null) {
     this.output = document.getElementById('terminal-output');
     this.input = document.getElementById('terminal-input');
     this.autocomplete = document.getElementById('autocomplete-dropdown');
     this.commandHandler = commandHandler;
+    this.fileProvider = fileProvider;
 
     this.input.addEventListener('keydown', this.onKeyDown.bind(this));
     this.input.addEventListener('input', this.onInput.bind(this));
@@ -232,6 +234,31 @@ export class Terminal {
         { value: 'leave', desc: 'Leave crew' },
       ];
       return subCmds.filter(s => s.value.startsWith(partial));
+    }
+
+    // File commands - get suggestions from fileProvider
+    if (['cat', 'rm', 'download'].includes(cmd) && this.fileProvider) {
+      const files = this.fileProvider(cmd);
+      return files
+        .filter(f => f.name.toLowerCase().startsWith(partial.toLowerCase()))
+        .map(f => ({
+          value: f.name,
+          desc: f.type ? `${f.size || 1} MB [${f.type.toUpperCase()}]` : `${f.size || 1} MB`,
+        }));
+    }
+
+    // Rig commands
+    if (cmd === 'rig' && partial.startsWith('buy')) {
+      return [
+        { value: 'buy phantom', desc: 'Stealth rig' },
+        { value: 'buy harvester', desc: 'Mining rig' },
+        { value: 'buy razorback', desc: 'Assault rig' },
+        { value: 'buy bastion', desc: 'Defense rig' },
+        { value: 'buy mule', desc: 'Storage rig' },
+        { value: 'buy wraith', desc: 'Evasion rig' },
+        { value: 'buy hydra', desc: 'Multi-target rig' },
+        { value: 'buy blacksite', desc: 'Counterintel rig' },
+      ].filter(r => r.value.startsWith(partial));
     }
 
     return [];
