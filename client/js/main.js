@@ -16,6 +16,11 @@ class App {
     this.currentNetwork = null;
     this.resources = {};
 
+    // DOM element cache for performance
+    this.domCache = {};
+    // Last known values to prevent redundant updates
+    this.lastUI = {};
+
     this.init();
   }
 
@@ -842,35 +847,71 @@ class App {
   updateUI() {
     const state = this.game.state;
 
-    // Update status bar
-    document.getElementById('credits').textContent = state.player.credits;
-    document.getElementById('reputation').textContent = state.player.reputation;
+    // Cache DOM elements on first call
+    if (!this.domCache.credits) {
+      this.domCache = {
+        credits: document.getElementById('credits'),
+        reputation: document.getElementById('reputation'),
+        heat: document.getElementById('heat'),
+        traceFill: document.getElementById('trace-fill'),
+        tracePercent: document.getElementById('trace-percent'),
+        cpuUsage: document.getElementById('cpu-usage'),
+        ramUsage: document.getElementById('ram-usage'),
+        bandwidth: document.getElementById('bandwidth'),
+        clock: document.getElementById('clock'),
+      };
+    }
 
-    const heatEl = document.getElementById('heat');
-    heatEl.textContent = `${state.player.heat.toFixed(2)}%`;
-    heatEl.className = `value ${state.player.heat > 70 ? 'heat-high' : state.player.heat > 40 ? 'heat-med' : 'heat-low'}`;
+    // Update only changed values
+    if (this.lastUI.credits !== state.player.credits) {
+      this.domCache.credits.textContent = state.player.credits;
+      this.lastUI.credits = state.player.credits;
+    }
+
+    if (this.lastUI.reputation !== state.player.reputation) {
+      this.domCache.reputation.textContent = state.player.reputation;
+      this.lastUI.reputation = state.player.reputation;
+    }
+
+    const heatText = `${state.player.heat.toFixed(2)}%`;
+    const heatClass = `value ${state.player.heat > 70 ? 'heat-high' : state.player.heat > 40 ? 'heat-med' : 'heat-low'}`;
+    if (this.lastUI.heat !== heatText) {
+      this.domCache.heat.textContent = heatText;
+      this.domCache.heat.className = heatClass;
+      this.lastUI.heat = heatText;
+    }
 
     // Update trace bar if connected
     if (state.connection.active) {
       const trace = state.connection.trace;
-      document.getElementById('trace-fill').style.width = `${trace}%`;
-      document.getElementById('trace-percent').textContent = `${trace.toFixed(2)}%`;
+      const traceText = `${trace.toFixed(2)}%`;
+      if (this.lastUI.trace !== traceText) {
+        this.domCache.traceFill.style.width = `${trace}%`;
+        this.domCache.tracePercent.textContent = traceText;
+        this.lastUI.trace = traceText;
+      }
 
-      // Check for trace completion
       if (trace >= 100) {
         this.onTraceComplete();
       }
     }
 
-    // Update hardware status
-    const hw = state.player.hardware;
-    document.getElementById('cpu-usage').textContent = `${hw.cpuUsed}/${hw.cpu}`;
-    document.getElementById('ram-usage').textContent = `${hw.ramUsed}/${hw.ram}MB`;
-    document.getElementById('bandwidth').textContent = `${hw.bandwidth}Mb/s`;
+    // Update hardware status (less frequent, check every 5th update)
+    if (!this.uiFrameCount) this.uiFrameCount = 0;
+    this.uiFrameCount++;
 
-    // Update clock
-    const now = new Date();
-    document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', { hour12: false });
+    if (this.uiFrameCount % 5 === 0) {
+      const hw = state.player.hardware;
+      this.domCache.cpuUsage.textContent = `${hw.cpuUsed}/${hw.cpu}`;
+      this.domCache.ramUsage.textContent = `${hw.ramUsed}/${hw.ram}MB`;
+      this.domCache.bandwidth.textContent = `${hw.bandwidth}Mb/s`;
+    }
+
+    // Update clock every second (10 frames at 100ms)
+    if (this.uiFrameCount % 10 === 0) {
+      const now = new Date();
+      this.domCache.clock.textContent = now.toLocaleTimeString('en-US', { hour12: false });
+    }
   }
 
   onTraceComplete() {
