@@ -151,7 +151,11 @@
 
 ### UI Improvements
 - [x] Add autocomplete for commands (Tab-completion already implemented)
-- [ ] Add button shortcuts for common actions
+- [x] **File Tab-Autocomplete** (Completed 2025-12-06)
+  - Tab-complete filenames for cat, rm, download commands
+  - Shows local files when disconnected, remote when connected
+  - Also added rig buy autocomplete
+- [x] Add button shortcuts for common actions
 - [ ] Improve node map visualization for larger networks
 - [ ] Add cluster/sector navigation view
 - [ ] Sound effects for alerts, hack success/fail
@@ -230,6 +234,21 @@
 - [x] **Interactive Network Map** (Completed 2025-12-06)
   - Clickable nodes execute move commands
   - EVE-styled connection colors
+- [x] **Computer Models System** (Completed 2025-12-06)
+  - 9 rig classes: Burner, Phantom, Harvester, Razorback, Bastion, Mule, Wraith, Hydra, Blacksite
+  - Each rig has unique bonuses, weaknesses, and slot layouts
+  - 20+ modules for Core, Memory, Expansion slots
+  - Commands: rig, rigs, modules, fit, unfit
+  - Sidebar shows rig name, specialty, stats, and equipped modules
+- [x] **Local Storage System** (Completed 2025-12-06)
+  - Player localStorage with capacity based on rig class
+  - ls shows local files when disconnected
+  - Commands: storage, cat, rm
+  - Downloaded files save to local storage
+- [x] **Public Chat Window** (Completed 2025-12-06)
+  - Global chat panel below network map
+  - Real-time messaging with player identification
+  - Self-highlighting (amber vs blue for others)
 - [ ] Player authentication system
 - [ ] Session management
 - [ ] Rate limiting

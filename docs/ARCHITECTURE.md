@@ -128,6 +128,57 @@ CREW_RESULT     // Organization updates
 }
 ```
 
+### Computer Rig (Implemented)
+
+EVE-style rig system with specialized classes and module fitting.
+
+```javascript
+// 9 Rig Classes (shared/computerModels.js)
+COMPUTER_CLASSES = {
+  BURNER:    { specialty: 'None', slots: { core: 1, memory: 1, expansion: 1 } },
+  PHANTOM:   { specialty: 'Stealth', bonus: '+40% trace resist' },
+  HARVESTER: { specialty: 'Mining', bonus: '+50% harvest yield' },
+  RAZORBACK: { specialty: 'Assault', bonus: '+35% breach speed' },
+  BASTION:   { specialty: 'Defense', bonus: '+50% firewall' },
+  MULE:      { specialty: 'Storage', bonus: '+100% capacity' },
+  WRAITH:    { specialty: 'Evasion', bonus: 'Clean disconnect' },
+  HYDRA:     { specialty: 'Multi-target', bonus: '2 connections' },
+  BLACKSITE: { specialty: 'Counterintel', bonus: '+30% detection' },
+}
+
+// Module Types
+RIG_MODULES = {
+  // Core: Icebreakers, Exploit Kit, Brute Force, Zero-Day
+  // Memory: Ghost Protocol, Log Shredder, Packet Sniffer
+  // Expansion: Neural Overclock, RAM/BW boosters, Storage Bay
+}
+```
+
+**Commands:** `rig`, `rigs`, `modules`, `fit <id>`, `unfit <id>`, `rig buy <id>`
+
+### Local Storage (Implemented)
+
+Player's local computer storage for files and software.
+
+```javascript
+player.localStorage = {
+  capacity: number,     // Based on rig class (Mule = 2x)
+  used: number,
+  files: [
+    { name: 'readme.txt', size: 1, type: 'text', content: '...' },
+  ],
+  installedSoftware: [],
+}
+```
+
+**Commands:**
+- `ls` - Shows local files when disconnected, remote when connected
+- `storage` - Detailed storage usage
+- `cat <file>` - Read file contents
+- `rm <file>` - Delete local files
+
+---
+
 ### ICE (Defense)
 
 ```javascript
