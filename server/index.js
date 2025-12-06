@@ -39,7 +39,7 @@ import {
   loadPlayerState
 } from './db.js';
 import { getRigById, getModuleById } from '../shared/computerModels.js';
-import { seedNpcMarketOrders, refreshNpcOrders } from './npcMarket.js';
+import { initializeNpcMarket, loadMarketOrdersFromDb, updateOrderQuantityInDb, deleteOrderFromDb } from './npcMarket.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -916,13 +916,16 @@ startGhostSpawnLoop(); // Start periodic ghost spawning
 startIntrusionProcessingLoop(); // Process intrusions and alerts
 startMarketCleanupLoop(); // Clean expired market orders
 
-// Seed NPC Market Orders
-function seedNpcMarket() {
-  const orders = seedNpcMarketOrders();
-  for (const order of orders) {
-    gameState.marketOrders.set(order.id, order);
+// Seed NPC Market Orders (async - loads from DB or seeds new)
+async function seedNpcMarket() {
+  const result = await initializeNpcMarket();
+
+  if (result.orders) {
+    for (const order of result.orders) {
+      gameState.marketOrders.set(order.id, order);
+    }
+    console.log(`  NPC Market: ${result.orders.length} orders ${result.fromDb ? 'loaded from DB' : 'seeded to DB'}`);
   }
-  console.log(`  NPC Market: ${orders.length} orders seeded`);
 }
 
 // Chat & Communications Handlers

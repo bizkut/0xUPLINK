@@ -2,6 +2,7 @@ import { Terminal } from './terminal.js';
 import { Game } from './game.js';
 import { NodeMap } from './nodeMap.js';
 import { UI } from './ui.js';
+import { MarketUI } from './market.js';
 import { SECTORS, SECURITY_ZONES, SOVEREIGNTY_STRUCTURES, HEAT_THRESHOLDS } from '../../shared/constants.js';
 
 class App {
@@ -35,6 +36,9 @@ class App {
 
     // Show login screen (game starts hidden until authenticated)
     this.loginScreen = new window.LoginScreen(this.game);
+
+    // Initialize Market UI
+    this.marketUI = new MarketUI(this.game);
 
     // Display welcome message (will be shown after login)
 
@@ -1736,45 +1740,13 @@ class App {
   // === MARKET ECONOMY COMMANDS ===
 
   async cmdMarket(args) {
-    this.terminal.print('Checking market orders...', 'system');
-
-    const resourceType = args[0] || null;
-    const result = await this.game.sendMessage('MARKET_LIST', { resourceType });
-
-    if (result.error) {
-      this.terminal.print(result.error, 'error');
-      return;
-    }
-
-    this.terminal.print('', '');
-    this.terminal.print('=== BLACK MARKET ===', 'info');
-
-    if (result.orders.length === 0) {
-      this.terminal.print('No orders available.', 'system');
+    // Open the visual market UI
+    if (this.marketUI) {
+      this.marketUI.open();
+      this.terminal.print('Opening Market...', 'system');
     } else {
-      this.terminal.print('SELL ORDERS:', 'warning');
-      for (const order of result.orders) {
-        this.terminal.print(
-          `  [${order.id.slice(-8)}] ${order.amount}x ${order.resource} @ ${order.pricePerUnit} CR/ea (${order.total} CR total)`,
-          'system'
-        );
-        this.terminal.print(`    Seller: ${order.seller} | Expires: ${order.expiresIn}min`, 'system');
-      }
+      this.terminal.print('Market UI not available.', 'error');
     }
-
-    if (result.myOrders && result.myOrders.length > 0) {
-      this.terminal.print('', '');
-      this.terminal.print('YOUR ORDERS:', 'info');
-      for (const order of result.myOrders) {
-        this.terminal.print(
-          `  [${order.id.slice(-8)}] ${order.amount}x ${order.resource} @ ${order.pricePerUnit} CR/ea`,
-          'success'
-        );
-      }
-    }
-
-    this.terminal.print('', '');
-    this.terminal.print('Commands: sell <resource> <amount> <price>, buy <orderId>', 'info');
   }
 
   async cmdSell(args) {

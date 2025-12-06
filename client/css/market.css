@@ -1,0 +1,491 @@
+/* Market UI - Eve Online Style */
+
+/* Market Modal Overlay */
+#market-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+#market-modal.visible {
+    display: flex;
+}
+
+/* Market Window */
+.market-window {
+    width: 900px;
+    max-width: 95vw;
+    height: 600px;
+    max-height: 90vh;
+    background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    box-shadow:
+        0 0 60px rgba(0, 255, 65, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+}
+
+/* Market Header */
+.market-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: linear-gradient(180deg, #21262d 0%, #161b22 100%);
+    border-bottom: 1px solid #30363d;
+}
+
+.market-title {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    font-weight: bold;
+    color: #00ff41;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.market-close {
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: 1px solid #484f58;
+    border-radius: 4px;
+    color: #7d8590;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.market-close:hover {
+    background: #f85149;
+    border-color: #f85149;
+    color: #fff;
+}
+
+/* Market Body - Three Column Layout */
+.market-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Left Sidebar - Categories */
+.market-categories {
+    width: 180px;
+    background: rgba(13, 17, 23, 0.5);
+    border-right: 1px solid #21262d;
+    overflow-y: auto;
+}
+
+.category-header {
+    padding: 10px 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    color: #7d8590;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid #21262d;
+}
+
+.category-item {
+    padding: 10px 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #c9d1d9;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.category-item:hover {
+    background: rgba(0, 255, 65, 0.05);
+    color: #00ff41;
+}
+
+.category-item.active {
+    background: rgba(0, 255, 65, 0.1);
+    border-left-color: #00ff41;
+    color: #00ff41;
+}
+
+.category-item .count {
+    float: right;
+    font-size: 10px;
+    color: #484f58;
+}
+
+/* Center - Item List */
+.market-items {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Search Bar */
+.market-search {
+    padding: 10px 12px;
+    border-bottom: 1px solid #21262d;
+}
+
+.market-search input {
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(22, 27, 34, 0.8);
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #00ff41;
+    outline: none;
+}
+
+.market-search input::placeholder {
+    color: #484f58;
+}
+
+.market-search input:focus {
+    border-color: #00ff41;
+    box-shadow: 0 0 0 2px rgba(0, 255, 65, 0.1);
+}
+
+/* Item Table */
+.market-table-container {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.market-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+}
+
+.market-table thead {
+    position: sticky;
+    top: 0;
+    background: #161b22;
+    z-index: 1;
+}
+
+.market-table th {
+    padding: 10px 12px;
+    text-align: left;
+    color: #7d8590;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 1px;
+    border-bottom: 1px solid #30363d;
+    cursor: pointer;
+}
+
+.market-table th:hover {
+    color: #00ff41;
+}
+
+.market-table th.sorted-asc::after {
+    content: ' ▲';
+    color: #00ff41;
+}
+
+.market-table th.sorted-desc::after {
+    content: ' ▼';
+    color: #00ff41;
+}
+
+.market-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #21262d;
+    color: #c9d1d9;
+}
+
+.market-table tbody tr {
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.market-table tbody tr:hover {
+    background: rgba(0, 255, 65, 0.05);
+}
+
+.market-table tbody tr.selected {
+    background: rgba(0, 255, 65, 0.1);
+}
+
+/* Price styling */
+.price-cell {
+    color: #3fb950;
+    font-weight: bold;
+}
+
+.tier-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: bold;
+    margin-left: 6px;
+}
+
+.tier-1 {
+    background: #484f58;
+    color: #c9d1d9;
+}
+
+.tier-2 {
+    background: #1f6feb;
+    color: #fff;
+}
+
+.tier-3 {
+    background: #8b5cf6;
+    color: #fff;
+}
+
+.tier-4 {
+    background: #f97316;
+    color: #fff;
+}
+
+/* Right Panel - Item Details */
+.market-details {
+    width: 280px;
+    background: rgba(13, 17, 23, 0.5);
+    border-left: 1px solid #21262d;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.details-header {
+    padding: 12px;
+    border-bottom: 1px solid #21262d;
+}
+
+.details-title {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    font-weight: bold;
+    color: #00ff41;
+    margin-bottom: 4px;
+}
+
+.details-category {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    color: #7d8590;
+    text-transform: uppercase;
+}
+
+.details-body {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+}
+
+.details-section {
+    margin-bottom: 16px;
+}
+
+.details-section-title {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    color: #7d8590;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #21262d;
+}
+
+.details-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+}
+
+.details-row .label {
+    color: #7d8590;
+}
+
+.details-row .value {
+    color: #c9d1d9;
+}
+
+.details-row .value.price {
+    color: #3fb950;
+    font-weight: bold;
+}
+
+/* Buy Section */
+.buy-section {
+    padding: 12px;
+    border-top: 1px solid #21262d;
+    background: rgba(22, 27, 34, 0.5);
+}
+
+.quantity-input {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.quantity-input label {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    color: #7d8590;
+    margin-right: 10px;
+    text-transform: uppercase;
+}
+
+.quantity-input input {
+    flex: 1;
+    padding: 8px 10px;
+    background: rgba(22, 27, 34, 0.8);
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #00ff41;
+    text-align: right;
+    outline: none;
+}
+
+.quantity-input input:focus {
+    border-color: #00ff41;
+}
+
+.total-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.total-row .label {
+    color: #7d8590;
+}
+
+.total-row .value {
+    color: #3fb950;
+    font-weight: bold;
+}
+
+.buy-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(180deg, #238636 0%, #1a7f32 100%);
+    border: 1px solid #3fb950;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.buy-btn:hover:not(:disabled) {
+    background: linear-gradient(180deg, #2ea043 0%, #238636 100%);
+    box-shadow: 0 0 15px rgba(63, 185, 80, 0.3);
+}
+
+.buy-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Empty State */
+.market-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #484f58;
+    font-family: 'Courier New', monospace;
+}
+
+.market-empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.market-empty-text {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* Tabs */
+.market-tabs {
+    display: flex;
+    border-bottom: 1px solid #21262d;
+}
+
+.market-tab {
+    padding: 10px 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #7d8590;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+}
+
+.market-tab:hover {
+    color: #c9d1d9;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.market-tab.active {
+    color: #00ff41;
+    border-bottom-color: #00ff41;
+}
+
+/* Scrollbar */
+.market-categories::-webkit-scrollbar,
+.market-table-container::-webkit-scrollbar,
+.details-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.market-categories::-webkit-scrollbar-track,
+.market-table-container::-webkit-scrollbar-track,
+.details-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.market-categories::-webkit-scrollbar-thumb,
+.market-table-container::-webkit-scrollbar-thumb,
+.details-body::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 3px;
+}
+
+.market-categories::-webkit-scrollbar-thumb:hover,
+.market-table-container::-webkit-scrollbar-thumb:hover,
+.details-body::-webkit-scrollbar-thumb:hover {
+    background: #484f58;
+}

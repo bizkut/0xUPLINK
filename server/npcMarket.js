@@ -1,97 +1,189 @@
-// NPC Market System - Anonymous vendors selling computers and modules
+// NPC Market System - Database-backed vendors and orders
 // Like Eve Online: sellers appear anonymous but have internal identities
 
 import { v4 as uuidv4 } from 'uuid';
 import { COMPUTER_CLASSES, RIG_MODULES } from '../shared/computerModels.js';
+import { createClient } from '@supabase/supabase-js';
+import 'dotenv/config';
 
-// NPC Vendor identities (internal, never shown to players)
-const NPC_VENDORS = [
-    { id: 'npc_tech_dealer_001', name: 'TechDealer_X1', type: 'tech' },
-    { id: 'npc_shadow_market_001', name: 'ShadowMarket_Alpha', type: 'shadow' },
-    { id: 'npc_corp_surplus_001', name: 'CorpSurplus_Liquidator', type: 'corp' },
-    { id: 'npc_blackmarket_001', name: 'BlackMarket_Runner', type: 'black' },
-    { id: 'npc_salvage_001', name: 'Salvage_Ops', type: 'salvage' },
-    { id: 'npc_underground_001', name: 'Underground_Exchange', type: 'underground' },
-    { id: 'npc_faction_ghost_001', name: 'Ghost_Faction_Trader', type: 'faction' },
-    { id: 'npc_faction_syndicate_001', name: 'Syndicate_Arms', type: 'faction' },
-];
+// Supabase client for market operations
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_KEY
+);
 
 // Price variance configuration
 const PRICE_CONFIG = {
-    // How much prices can deviate from base (±%)
     minVariance: 0.85,  // -15%
     maxVariance: 1.20,  // +20%
-
-    // Vendor type affects pricing
-    vendorModifiers: {
-        tech: 1.0,        // Standard pricing
-        shadow: 0.95,     // 5% cheaper (risky source)
-        corp: 1.05,       // 5% more expensive (reliable)
-        black: 0.90,      // 10% cheaper (very risky)
-        salvage: 0.80,    // 20% cheaper (used/damaged goods)
-        underground: 0.92, // 8% cheaper
-        faction: 1.10,    // 10% more expensive (faction loyalty required)
-    },
-
-    // Order expiry (1 year in ms)
-    npcOrderExpiry: 365 * 24 * 60 * 60 * 1000,
+    npcOrderExpiry: 365 * 24 * 60 * 60 * 1000, // 1 year in ms
 };
 
+// Cached vendors (loaded from DB)
+let cachedVendors = [];
+
+// Load vendors from database
+export async function loadVendorsFromDb() {
+    const { data, error } = await supabase
+        .from('npc_vendors')
+        .select('*')
+        .eq('is_active', true);
+
+    if (error) {
+        console.error('[NPC Market] Failed to load vendors:', error);
+        return [];
+    }
+
+    cachedVendors = data;
+    console.log(`[NPC Market] Loaded ${data.length} vendors from database`);
+    return data;
+}
+
+// Get a random vendor from cache
+function getRandomVendor() {
+    if (cachedVendors.length === 0) return null;
+    return cachedVendors[Math.floor(Math.random() * cachedVendors.length)];
+}
+
 // Generate a realistic price with variance
-function generatePrice(basePrice, vendorType) {
-    const vendorMod = PRICE_CONFIG.vendorModifiers[vendorType] || 1.0;
+function generatePrice(basePrice, priceModifier = 1.0) {
     const variance = PRICE_CONFIG.minVariance +
         (Math.random() * (PRICE_CONFIG.maxVariance - PRICE_CONFIG.minVariance));
 
-    const finalPrice = Math.round(basePrice * vendorMod * variance);
+    const finalPrice = Math.round(basePrice * priceModifier * variance);
 
     // Round to nice numbers for realism
     if (finalPrice >= 10000) {
-        return Math.round(finalPrice / 100) * 100; // Round to nearest 100
+        return Math.round(finalPrice / 100) * 100;
     } else if (finalPrice >= 1000) {
-        return Math.round(finalPrice / 50) * 50; // Round to nearest 50
+        return Math.round(finalPrice / 50) * 50;
     } else {
-        return Math.round(finalPrice / 10) * 10; // Round to nearest 10
+        return Math.round(finalPrice / 10) * 10;
     }
 }
 
 // Generate a random quantity based on item tier/rarity
 function generateQuantity(tier) {
     switch (tier) {
-        case 0: return Math.floor(Math.random() * 50) + 20;  // Common (Burner)
-        case 1: return Math.floor(Math.random() * 20) + 10;  // Uncommon
-        case 2: return Math.floor(Math.random() * 10) + 5;   // Rare
-        case 3: return Math.floor(Math.random() * 5) + 2;    // Very Rare
-        case 4: return Math.floor(Math.random() * 3) + 1;    // Legendary
+        case 0: return Math.floor(Math.random() * 50) + 20;
+        case 1: return Math.floor(Math.random() * 20) + 10;
+        case 2: return Math.floor(Math.random() * 10) + 5;
+        case 3: return Math.floor(Math.random() * 5) + 2;
+        case 4: return Math.floor(Math.random() * 3) + 1;
         default: return Math.floor(Math.random() * 15) + 5;
     }
 }
 
-// Get a random NPC vendor
-function getRandomVendor() {
-    return NPC_VENDORS[Math.floor(Math.random() * NPC_VENDORS.length)];
+// Load existing market orders from database
+export async function loadMarketOrdersFromDb() {
+    const now = new Date().toISOString();
+
+    const { data, error } = await supabase
+        .from('market_orders')
+        .select('*')
+        .gt('expires_at', now);
+
+    if (error) {
+        console.error('[NPC Market] Failed to load orders:', error);
+        return [];
+    }
+
+    // Convert to in-memory format
+    return data.map(o => ({
+        id: o.id,
+        sellerId: o.seller_id,
+        sellerName: o.seller_name,
+        isNpc: o.is_npc,
+        itemType: o.item_type,
+        itemId: o.item_id,
+        itemName: o.item_name,
+        itemTier: o.item_tier,
+        itemCategory: o.item_category,
+        price: o.price,
+        quantity: o.quantity,
+        createdAt: new Date(o.created_at).getTime(),
+        expiresAt: new Date(o.expires_at).getTime(),
+    }));
 }
 
-// Generate NPC sell orders for computers
-export function generateComputerOrders() {
+// Save a market order to database
+export async function saveMarketOrderToDb(order) {
+    const { error } = await supabase
+        .from('market_orders')
+        .insert({
+            id: order.id,
+            seller_id: order.sellerId,
+            seller_name: order.sellerName,
+            is_npc: order.isNpc || false,
+            item_type: order.itemType,
+            item_id: order.itemId,
+            item_name: order.itemName,
+            item_tier: order.itemTier,
+            item_category: order.itemCategory,
+            price: order.price,
+            quantity: order.quantity,
+            created_at: new Date(order.createdAt).toISOString(),
+            expires_at: new Date(order.expiresAt).toISOString(),
+        });
+
+    if (error) {
+        console.error('[NPC Market] Failed to save order:', error);
+        return false;
+    }
+    return true;
+}
+
+// Update order quantity in database
+export async function updateOrderQuantityInDb(orderId, newQuantity) {
+    if (newQuantity <= 0) {
+        // Delete order if quantity reaches 0
+        const { error } = await supabase
+            .from('market_orders')
+            .delete()
+            .eq('id', orderId);
+
+        if (error) console.error('[NPC Market] Failed to delete order:', error);
+        return;
+    }
+
+    const { error } = await supabase
+        .from('market_orders')
+        .update({ quantity: newQuantity })
+        .eq('id', orderId);
+
+    if (error) console.error('[NPC Market] Failed to update order:', error);
+}
+
+// Delete order from database
+export async function deleteOrderFromDb(orderId) {
+    const { error } = await supabase
+        .from('market_orders')
+        .delete()
+        .eq('id', orderId);
+
+    if (error) console.error('[NPC Market] Failed to delete order:', error);
+}
+
+// Generate and save NPC orders for computers
+async function generateComputerOrders() {
     const orders = [];
 
     for (const rig of Object.values(COMPUTER_CLASSES)) {
-        // Skip free items from NPC market
         if (rig.price === 0) continue;
 
-        // Generate 1-3 orders per rig type from different vendors
         const numOrders = Math.floor(Math.random() * 3) + 1;
 
         for (let i = 0; i < numOrders; i++) {
             const vendor = getRandomVendor();
-            const price = generatePrice(rig.price, vendor.type);
+            if (!vendor) continue;
+
+            const price = generatePrice(rig.price, vendor.price_modifier);
             const quantity = generateQuantity(rig.tier);
 
-            orders.push({
+            const order = {
                 id: uuidv4(),
-                sellerId: vendor.id,
-                sellerName: vendor.name, // Internal only, never shown
+                sellerId: vendor.vendor_code,
+                sellerName: vendor.name,
                 isNpc: true,
                 itemType: 'computer',
                 itemId: rig.id,
@@ -102,22 +194,23 @@ export function generateComputerOrders() {
                 quantity: quantity,
                 createdAt: Date.now(),
                 expiresAt: Date.now() + PRICE_CONFIG.npcOrderExpiry,
-            });
+            };
+
+            orders.push(order);
+            await saveMarketOrderToDb(order);
         }
     }
 
     return orders;
 }
 
-// Generate NPC sell orders for modules
-export function generateModuleOrders() {
+// Generate and save NPC orders for modules
+async function generateModuleOrders() {
     const orders = [];
 
     for (const mod of Object.values(RIG_MODULES)) {
-        // Generate 1-4 orders per module type
         const numOrders = Math.floor(Math.random() * 4) + 1;
 
-        // Determine tier based on price
         let tier = 1;
         if (mod.price >= 15000) tier = 4;
         else if (mod.price >= 5000) tier = 3;
@@ -125,12 +218,14 @@ export function generateModuleOrders() {
 
         for (let i = 0; i < numOrders; i++) {
             const vendor = getRandomVendor();
-            const price = generatePrice(mod.price, vendor.type);
+            if (!vendor) continue;
+
+            const price = generatePrice(mod.price, vendor.price_modifier);
             const quantity = generateQuantity(tier);
 
-            orders.push({
+            const order = {
                 id: uuidv4(),
-                sellerId: vendor.id,
+                sellerId: vendor.vendor_code,
                 sellerName: vendor.name,
                 isNpc: true,
                 itemType: 'module',
@@ -142,53 +237,57 @@ export function generateModuleOrders() {
                 quantity: quantity,
                 createdAt: Date.now(),
                 expiresAt: Date.now() + PRICE_CONFIG.npcOrderExpiry,
-            });
+            };
+
+            orders.push(order);
+            await saveMarketOrderToDb(order);
         }
     }
 
     return orders;
 }
 
-// Generate all NPC market orders
-export function seedNpcMarketOrders() {
-    const computerOrders = generateComputerOrders();
-    const moduleOrders = generateModuleOrders();
+// Initialize NPC market - load from DB or seed if empty
+export async function initializeNpcMarket() {
+    // 1. Load vendors from DB
+    await loadVendorsFromDb();
+
+    if (cachedVendors.length === 0) {
+        console.error('[NPC Market] No vendors found in database! Run migration to seed vendors.');
+        return { computerOrders: [], moduleOrders: [] };
+    }
+
+    // 2. Check if we have existing orders
+    const existingOrders = await loadMarketOrdersFromDb();
+
+    if (existingOrders.length > 0) {
+        console.log(`[NPC Market] Loaded ${existingOrders.length} existing orders from database`);
+        return { orders: existingOrders, fromDb: true };
+    }
+
+    // 3. No orders exist - generate and save new ones
+    console.log('[NPC Market] No orders in DB, generating new NPC orders...');
+    const computerOrders = await generateComputerOrders();
+    const moduleOrders = await generateModuleOrders();
 
     console.log(`[NPC Market] Generated ${computerOrders.length} computer orders`);
     console.log(`[NPC Market] Generated ${moduleOrders.length} module orders`);
 
-    return [...computerOrders, ...moduleOrders];
+    return {
+        orders: [...computerOrders, ...moduleOrders],
+        fromDb: false
+    };
 }
 
-// Refresh NPC orders (called periodically to replenish sold-out items)
-export function refreshNpcOrders(existingOrders) {
-    const now = Date.now();
-    const refreshed = [];
+// Restock sold-out items (called periodically)
+export async function restockNpcOrders() {
+    const existingOrders = await loadMarketOrdersFromDb();
 
-    // Check each existing NPC order
-    for (const order of existingOrders) {
-        if (!order.isNpc) {
-            refreshed.push(order);
-            continue;
-        }
-
-        // Remove expired orders
-        if (order.expiresAt < now) {
-            console.log(`[NPC Market] Order expired: ${order.itemName}`);
-            continue;
-        }
-
-        // Keep valid orders
-        if (order.quantity > 0) {
-            refreshed.push(order);
-        }
-    }
-
-    // Check if we need to add more orders for any item type
+    // Count orders per item
     const computerCounts = {};
     const moduleCounts = {};
 
-    for (const order of refreshed) {
+    for (const order of existingOrders) {
         if (!order.isNpc) continue;
 
         if (order.itemType === 'computer') {
@@ -198,18 +297,19 @@ export function refreshNpcOrders(existingOrders) {
         }
     }
 
-    // Ensure at least 1 order for each computer type
+    let restocked = 0;
+
+    // Restock computers
     for (const rig of Object.values(COMPUTER_CLASSES)) {
         if (rig.price === 0) continue;
 
         if (!computerCounts[rig.id] || computerCounts[rig.id] < 1) {
             const vendor = getRandomVendor();
-            const price = generatePrice(rig.price, vendor.type);
-            const quantity = generateQuantity(rig.tier);
+            if (!vendor) continue;
 
-            refreshed.push({
+            const order = {
                 id: uuidv4(),
-                sellerId: vendor.id,
+                sellerId: vendor.vendor_code,
                 sellerName: vendor.name,
                 isNpc: true,
                 itemType: 'computer',
@@ -217,31 +317,31 @@ export function refreshNpcOrders(existingOrders) {
                 itemName: rig.name,
                 itemTier: rig.tier,
                 itemCategory: rig.specialty,
-                price: price,
-                quantity: quantity,
-                createdAt: now,
-                expiresAt: now + PRICE_CONFIG.npcOrderExpiry,
-            });
+                price: generatePrice(rig.price, vendor.price_modifier),
+                quantity: generateQuantity(rig.tier),
+                createdAt: Date.now(),
+                expiresAt: Date.now() + PRICE_CONFIG.npcOrderExpiry,
+            };
 
-            console.log(`[NPC Market] Restocked: ${rig.name}`);
+            await saveMarketOrderToDb(order);
+            restocked++;
         }
     }
 
-    // Ensure at least 1 order for each module type
+    // Restock modules
     for (const mod of Object.values(RIG_MODULES)) {
         if (!moduleCounts[mod.id] || moduleCounts[mod.id] < 1) {
             const vendor = getRandomVendor();
+            if (!vendor) continue;
+
             let tier = 1;
             if (mod.price >= 15000) tier = 4;
             else if (mod.price >= 5000) tier = 3;
             else if (mod.price >= 2000) tier = 2;
 
-            const price = generatePrice(mod.price, vendor.type);
-            const quantity = generateQuantity(tier);
-
-            refreshed.push({
+            const order = {
                 id: uuidv4(),
-                sellerId: vendor.id,
+                sellerId: vendor.vendor_code,
                 sellerName: vendor.name,
                 isNpc: true,
                 itemType: 'module',
@@ -249,17 +349,22 @@ export function refreshNpcOrders(existingOrders) {
                 itemName: mod.name,
                 itemTier: tier,
                 itemCategory: mod.slotType,
-                price: price,
-                quantity: quantity,
-                createdAt: now,
-                expiresAt: now + PRICE_CONFIG.npcOrderExpiry,
-            });
+                price: generatePrice(mod.price, vendor.price_modifier),
+                quantity: generateQuantity(tier),
+                createdAt: Date.now(),
+                expiresAt: Date.now() + PRICE_CONFIG.npcOrderExpiry,
+            };
 
-            console.log(`[NPC Market] Restocked: ${mod.name}`);
+            await saveMarketOrderToDb(order);
+            restocked++;
         }
     }
 
-    return refreshed;
+    if (restocked > 0) {
+        console.log(`[NPC Market] Restocked ${restocked} items`);
+    }
+
+    return restocked;
 }
 
-export { NPC_VENDORS, PRICE_CONFIG };
+export { PRICE_CONFIG };

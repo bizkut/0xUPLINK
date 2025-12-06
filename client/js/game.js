@@ -179,6 +179,12 @@ export class Game {
       case 'CHAT_MESSAGE':
         window.dispatchEvent(new CustomEvent('chat-message', { detail: payload }));
         break;
+      case 'MARKET_LIST_RESULT':
+        window.dispatchEvent(new CustomEvent('market-list-result', { detail: payload }));
+        break;
+      case 'MARKET_BUY_RESULT':
+        window.dispatchEvent(new CustomEvent('market-buy-result', { detail: payload }));
+        break;
       case 'PLAYER_COUNT':
         window.dispatchEvent(new CustomEvent('player-count', { detail: payload }));
         break;
