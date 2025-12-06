@@ -49,6 +49,7 @@ export class Game {
     // Give starter software
     this.addSoftware('icebreaker', 1);
     this.addSoftware('password_cracker', 1);
+    this.addSoftware('log_cleaner', 1);
   }
 
   async connect() {
