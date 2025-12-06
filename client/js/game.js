@@ -290,8 +290,8 @@ export class Game {
 
   async scanTarget(ip) {
     // Check if already scanned
-    if (this.scannedServers[ip]) {
-      return this.scannedServers[ip];
+    if (this.state.scannedServers[ip]) {
+      return this.state.scannedServers[ip];
     }
 
     // Apply heat-based scan delay
