@@ -198,6 +198,19 @@ export class MarketUI {
       }
     });
 
+    // Listen for modify result
+    window.addEventListener('market-modify-result', (e) => {
+      if (this.isOpen && e.detail) {
+        const resultEl = document.getElementById('modify-result');
+        if (e.detail.success) {
+          if (resultEl) resultEl.innerHTML = '<span style="color: #3fb950;">✓ Order modified!</span>';
+          setTimeout(() => this.requestMarketData(), 500);
+        } else {
+          if (resultEl) resultEl.innerHTML = `<span style="color: #f85149;">${e.detail.error || 'Failed'}</span>`;
+        }
+      }
+    });
+
     // Store reference for onclick handlers
     window.marketUI = this;
   }
@@ -563,7 +576,7 @@ export class MarketUI {
     if (this.myOrders.length === 0) {
       this.tableBody.innerHTML = `
         <tr>
-          <td colspan="4" style="text-align: center; color: #484f58; padding: 40px;">
+          <td colspan="5" style="text-align: center; color: #484f58; padding: 40px;">
             You have no active orders
           </td>
         </tr>
@@ -577,22 +590,52 @@ export class MarketUI {
       return;
     }
 
-    this.tableBody.innerHTML = this.myOrders.map(order => `
-      <tr data-order-id="${order.id}">
-        <td>
-          ${order.itemName || order.resource}
-          <span class="tier-badge tier-${order.itemTier || 1}">T${order.itemTier || 1}</span>
-        </td>
-        <td>${order.quantity || order.amount || 1}</td>
-        <td class="price-cell">${this.formatCredits(order.price || order.pricePerUnit)}</td>
-        <td>
-          <button class="cancel-order-btn" data-order-id="${order.id}" 
-                  style="padding: 4px 8px; background: #f85149; border: none; color: #fff; cursor: pointer; font-size: 10px;">
-            CANCEL
-          </button>
-        </td>
-      </tr>
-    `).join('');
+    const now = Date.now();
+    const cooldownMs = 120000; // 2 minutes
+
+    this.tableBody.innerHTML = this.myOrders.map(order => {
+      const orderType = order.orderType || 'sell';
+      const typeBadge = orderType === 'buy'
+        ? '<span style="color: #3fb950; font-size: 9px; margin-left: 4px;">BUY</span>'
+        : '<span style="color: #f0883e; font-size: 9px; margin-left: 4px;">SELL</span>';
+
+      const lastMod = order.lastModified || order.createdAt || 0;
+      const cooldownRemaining = Math.max(0, cooldownMs - (now - lastMod));
+      const onCooldown = cooldownRemaining > 0;
+      const cooldownSec = Math.ceil(cooldownRemaining / 1000);
+
+      return `
+        <tr data-order-id="${order.id}">
+          <td>
+            ${order.itemName || order.resource}
+            ${typeBadge}
+          </td>
+          <td>${order.quantity || order.amount || 1}</td>
+          <td class="price-cell">${this.formatCredits(order.price || order.pricePerUnit)}</td>
+          <td>
+            <button class="modify-order-btn" data-order-id="${order.id}" 
+                    style="padding: 4px 8px; background: ${onCooldown ? '#484f58' : '#238636'}; border: none; color: #fff; cursor: ${onCooldown ? 'not-allowed' : 'pointer'}; font-size: 10px; margin-right: 4px;"
+                    ${onCooldown ? 'disabled title="Cooldown: ' + cooldownSec + 's"' : ''}>
+              ${onCooldown ? cooldownSec + 's' : 'MODIFY'}
+            </button>
+            <button class="cancel-order-btn" data-order-id="${order.id}" 
+                    style="padding: 4px 8px; background: #f85149; border: none; color: #fff; cursor: pointer; font-size: 10px;">
+              CANCEL
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Attach modify handlers
+    this.tableBody.querySelectorAll('.modify-order-btn:not([disabled])').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const orderId = btn.dataset.orderId;
+        const order = this.myOrders.find(o => o.id === orderId);
+        if (order) this.showModifyModal(order);
+      });
+    });
 
     // Attach cancel handlers
     this.tableBody.querySelectorAll('.cancel-order-btn').forEach(btn => {
@@ -622,15 +665,31 @@ export class MarketUI {
   }
 
   renderMyOrderDetails(order) {
+    const orderType = order.orderType || 'sell';
+    const typeLabel = orderType === 'buy' ? 'Your Buy Order' : 'Your Sell Order';
+    const typeColor = orderType === 'buy' ? '#3fb950' : '#f0883e';
+    const modifyHint = orderType === 'sell'
+      ? 'Sell orders: can only decrease quantity'
+      : 'Buy orders: can only increase quantity';
+
+    const now = Date.now();
+    const lastMod = order.lastModified || order.createdAt || 0;
+    const cooldownRemaining = Math.max(0, 120000 - (now - lastMod));
+    const onCooldown = cooldownRemaining > 0;
+
     this.detailsPanel.innerHTML = `
       <div class="details-header">
         <div class="details-title">${order.itemName || order.resource}</div>
-        <div class="details-category">Your Sell Order</div>
+        <div class="details-category" style="color: ${typeColor};">${typeLabel}</div>
       </div>
       
       <div class="details-body">
         <div class="details-section">
           <div class="details-section-title">Order Info</div>
+          <div class="details-row">
+            <span class="label">Type</span>
+            <span class="value" style="color: ${typeColor};">${orderType.toUpperCase()}</span>
+          </div>
           <div class="details-row">
             <span class="label">Amount</span>
             <span class="value">${order.quantity || order.amount}</span>
@@ -643,16 +702,102 @@ export class MarketUI {
             <span class="label">Total Value</span>
             <span class="value price">${this.formatCredits((order.price || order.pricePerUnit) * (order.quantity || order.amount))}</span>
           </div>
+          ${onCooldown ? `
+          <div class="details-row" style="color: #f0883e;">
+            <span class="label">Cooldown</span>
+            <span class="value">${Math.ceil(cooldownRemaining / 1000)}s</span>
+          </div>
+          ` : ''}
+        </div>
+        
+        <div class="details-section" style="margin-top: 12px; font-size: 10px; color: #7d8590;">
+          ${modifyHint}
         </div>
       </div>
       
-      <div class="buy-section">
-        <button class="buy-btn" style="background: linear-gradient(180deg, #f85149 0%, #da3633 100%); border-color: #f85149;" 
+      <div class="buy-section" style="display: flex; gap: 8px;">
+        <button class="buy-btn" style="flex: 1; background: ${onCooldown ? 'linear-gradient(180deg, #484f58 0%, #333 100%)' : 'linear-gradient(180deg, #238636 0%, #1a7f37 100%)'}; border-color: ${onCooldown ? '#484f58' : '#238636'};" 
+                onclick="window.marketUI?.showModifyModal(window.marketUI.myOrders.find(o => o.id === '${order.id}'))"
+                ${onCooldown ? 'disabled' : ''}>
+          ${onCooldown ? 'Cooldown' : 'Modify Order'}
+        </button>
+        <button class="buy-btn" style="flex: 1; background: linear-gradient(180deg, #f85149 0%, #da3633 100%); border-color: #f85149;" 
                 onclick="window.marketUI?.cancelOrder('${order.id}')">
           Cancel Order
         </button>
       </div>
     `;
+  }
+
+  showModifyModal(order) {
+    if (!order) return;
+
+    const orderType = order.orderType || 'sell';
+    const currentAmount = order.quantity || order.amount || 1;
+    const currentPrice = order.price || order.pricePerUnit || 1;
+    const modifyHint = orderType === 'sell'
+      ? `Sell orders can only DECREASE (max: ${currentAmount})`
+      : `Buy orders can only INCREASE (min: ${currentAmount})`;
+
+    // Show in details panel as a form
+    this.detailsPanel.innerHTML = `
+      <div class="details-header">
+        <div class="details-title">Modify Order</div>
+        <div class="details-category">${order.itemName || order.resource}</div>
+      </div>
+      
+      <div class="details-body">
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; color: #7d8590; font-size: 10px; margin-bottom: 4px;">NEW QUANTITY</label>
+          <input type="number" id="modify-amount" value="${currentAmount}" 
+                 ${orderType === 'sell' ? `max="${currentAmount}"` : `min="${currentAmount}"`}
+                 style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; color: #00ff41; font-family: 'Courier New', monospace;">
+          <div style="font-size: 10px; color: #7d8590; margin-top: 4px;">${modifyHint}</div>
+        </div>
+        
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; color: #7d8590; font-size: 10px; margin-bottom: 4px;">NEW PRICE PER UNIT</label>
+          <input type="number" id="modify-price" value="${currentPrice}" min="1" max="1000000"
+                 style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; color: #3fb950; font-family: 'Courier New', monospace;">
+        </div>
+        
+        <div style="font-size: 10px; color: #f0883e; margin-bottom: 8px;">
+          ⚠️ Modification fee: 10 CR
+        </div>
+        
+        <div id="modify-result" style="margin-bottom: 8px; text-align: center;"></div>
+      </div>
+      
+      <div class="buy-section" style="display: flex; gap: 8px;">
+        <button class="buy-btn" style="flex: 1;" onclick="window.marketUI?.modifyOrder('${order.id}')">
+          Confirm Modify
+        </button>
+        <button class="buy-btn" style="flex: 1; background: linear-gradient(180deg, #484f58 0%, #333 100%); border-color: #484f58;" 
+                onclick="window.marketUI?.renderMyOrderDetails(window.marketUI.myOrders.find(o => o.id === '${order.id}'))">
+          Cancel
+        </button>
+      </div>
+    `;
+  }
+
+  modifyOrder(orderId) {
+    const newAmount = parseInt(document.getElementById('modify-amount')?.value) || 0;
+    const newPrice = parseInt(document.getElementById('modify-price')?.value) || 0;
+    const resultEl = document.getElementById('modify-result');
+
+    if (newAmount <= 0 || newPrice <= 0) {
+      if (resultEl) resultEl.innerHTML = '<span style="color: #f85149;">Invalid amount or price</span>';
+      return;
+    }
+
+    if (this.game.ws && this.game.ws.readyState === WebSocket.OPEN) {
+      this.game.ws.send(JSON.stringify({
+        type: 'MARKET_MODIFY',
+        payload: { orderId, newAmount, newPrice }
+      }));
+
+      if (resultEl) resultEl.innerHTML = '<span style="color: #7d8590;">Modifying...</span>';
+    }
   }
 
   cancelOrder(orderId) {
