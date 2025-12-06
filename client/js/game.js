@@ -50,24 +50,117 @@ export class Game {
     this.addSoftware('icebreaker', 1);
     this.addSoftware('password_cracker', 1);
     this.addSoftware('log_cleaner', 1);
+
+    // Pending message callbacks for request/response pattern
+    this.pendingCallbacks = new Map();
+    this.messageId = 0;
   }
 
   async connect() {
-    // For now, run in offline/single-player mode
-    // WebSocket connection will be added for multiplayer
-    this.state.player.id = 'local_' + Math.random().toString(36).substr(2, 9);
-    this.generateContracts();
-    return true;
+    return new Promise((resolve, reject) => {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProtocol}//${window.location.host}`;
+
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        console.log('[Game] WebSocket connected');
+        this.generateContracts();
+        resolve(true);
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          this.handleServerMessage(message);
+        } catch (e) {
+          console.error('[Game] Failed to parse message:', e);
+        }
+      };
+
+      this.ws.onerror = (error) => {
+        console.error('[Game] WebSocket error:', error);
+        // Fallback to offline mode
+        this.state.player.id = 'offline_' + Math.random().toString(36).substr(2, 9);
+        resolve(true);
+      };
+
+      this.ws.onclose = () => {
+        console.log('[Game] WebSocket disconnected');
+      };
+    });
+  }
+
+  handleServerMessage(message) {
+    const { type, payload, messageId } = message;
+
+    // Handle response to a pending request
+    if (messageId && this.pendingCallbacks.has(messageId)) {
+      const callback = this.pendingCallbacks.get(messageId);
+      this.pendingCallbacks.delete(messageId);
+      callback(payload);
+      return;
+    }
+
+    // Handle server-pushed events
+    switch (type) {
+      case 'INIT':
+        this.state.player.id = payload.playerId;
+        this.state.player.ip = payload.ip;
+        this.state.player.credits = payload.credits;
+        if (payload.resources) {
+          this.state.player.resources = payload.resources;
+        }
+        console.log('[Game] Initialized with ID:', payload.playerId);
+        break;
+      case 'INTRUSION_ALERT':
+        console.log('[Game] Intrusion from:', payload.attackerIp);
+        // Could dispatch custom event for UI
+        window.dispatchEvent(new CustomEvent('intrusion-alert', { detail: payload }));
+        break;
+      case 'HACK_ACTIVITY':
+        console.log('[Game] Hack activity:', payload);
+        break;
+      default:
+        // Most messages are responses, handled by pendingCallbacks
+        console.log('[Game] Unhandled message:', type);
+    }
   }
 
   /**
    * Send a message to the server and wait for response
-   * For now, returns mock responses for Safe House commands
+   * Uses WebSocket if connected, falls back to mocks if offline
    */
-  async sendMessage(type, payload) {
-    // TODO: Implement real WebSocket communication
-    // For now, return mock responses for testing client UI
+  async sendMessage(type, payload = {}) {
+    // If WebSocket is connected, send real message
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      return this.sendWebSocketMessage(type, payload);
+    }
 
+    // Fallback to mock responses for offline mode
+    return this.getMockResponse(type, payload);
+  }
+
+  sendWebSocketMessage(type, payload) {
+    return new Promise((resolve, reject) => {
+      const messageId = ++this.messageId;
+      const timeout = setTimeout(() => {
+        this.pendingCallbacks.delete(messageId);
+        // Timeout - fall back to mock
+        console.log(`[Game] Request ${type} timed out, using mock`);
+        resolve(this.getMockResponse(type, payload));
+      }, 5000);
+
+      this.pendingCallbacks.set(messageId, (response) => {
+        clearTimeout(timeout);
+        resolve(response);
+      });
+
+      this.ws.send(JSON.stringify({ type, payload, messageId }));
+    });
+  }
+
+  getMockResponse(type, payload) {
     switch (type) {
       case 'DOCK':
         // Check if at a network with Safe House (mock)
