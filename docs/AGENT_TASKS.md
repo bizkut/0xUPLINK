@@ -179,15 +179,46 @@
   - Client commands: dock, undock, hangar, store, retrieve, sethome
   - Per-location asset storage (rigs, software, files, resources)
 - [ ] Faction warfare system (GreyNet control)
-- [ ] Active Defender Counter-Play (real-time PvP responses)
+- [x] **Active Defender Counter-Play** (Completed 2025-12-06)
+  - Added `COUNTER_PROGRAMS` and `INTRUSION_CONFIG` to `constants.js`
+  - Created `defender.js` module with intrusion tracking
+  - Server handlers: DEFEND_VIEW, DEFEND_BACKTRACE, DEFEND_COUNTERICE, DEFEND_LOCKDOWN
+  - Client commands: defend, backtrace, counterice, lockdown
+  - Intrusion alerts sent to network owners after 5s delay
+  - Counter-programs: Backtrace (500 CR), Counter-ICE (1000 CR), Lockdown (2000 CR)
 - [ ] Ghost Networks (temporary high-value "wormhole" zones)
 - [ ] Insurance/backup system for hardware
 - [ ] Contract marketplace (player-created)
+- [x] **Player Market Economy** (Completed 2025-12-06)
+  - Added `MARKET_CONFIG` and `TRADEABLE_RESOURCES` to `constants.js`
+  - Server handlers: MARKET_LIST, MARKET_SELL, MARKET_BUY, MARKET_CANCEL
+  - Client commands: market, sell, buy
+  - 5% transaction fee, 10 CR listing fee, 24hr order expiry
+  - Auto-cleanup loop for expired orders with resource refund
 - [ ] Black market with dynamic prices
 - [ ] Player Market Economy (buy/sell orders)
+- [x] **Death/Loss Consequences** (Completed 2025-12-06)
+  - Added `DEATH_CONFIG` constant with trace/kill penalties
+  - Player model: rigIntegrity, homeSafeHouse, respawnProtection
+  - 10% credit loss, 50% cargo loss, 25% rig damage on trace
+  - Respawn at home Safe House or ClearNet
+  - Client commands: rig (status), repair (fix at Safe House)
 
 ### Technical
 - [ ] Database persistence (PostgreSQL)
+- [ ] Redis for real-time pub/sub
+- [x] **UI Autocomplete & Hotkeys** (Completed 2025-12-06)
+  - Ctrl+D disconnect, Ctrl+S status, Ctrl+H help, Ctrl+L clear
+  - Ctrl+R rig status, Ctrl+M market
+  - Contextual suggestions for resources, nodes, crew subcommands
+- [x] **In-Game Comms & Reputation** (Completed 2025-12-06)
+  - Chat channels: local (cluster), global, crew, darknet
+  - 8 reputation titles from Blacklisted (-100) to Legend (2500)
+  - Commands: say, shout, rep
+- [x] **Specialization Paths** (Completed 2025-12-06)
+  - 3 paths: Infiltrator (stealth), Sentinel (defense), Broker (trading)
+  - 15 unique skills with prerequisites and escalating costs
+  - Commands: skills, spec choose, spec learn
 - [ ] Player authentication system
 - [ ] Session management
 - [ ] Rate limiting

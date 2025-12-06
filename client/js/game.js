@@ -124,6 +124,80 @@ export class Game {
       case 'SET_HOME':
         return { success: true, home: 'Demo Data Haven' };
 
+      // Defender commands - mock responses
+      case 'DEFEND_VIEW':
+        return {
+          success: true,
+          intrusions: [], // No intrusions in single-player mock
+          counterPrograms: [
+            { id: 'backtrace', name: 'Backtrace', description: 'Trace the attacker\'s IP.', cost: 500 },
+            { id: 'counter_ice', name: 'Counter-ICE', description: 'Damage attacker hardware.', cost: 1000 },
+            { id: 'lockdown', name: 'Lockdown', description: 'Force-disconnect all intruders.', cost: 2000 },
+          ],
+        };
+
+      case 'DEFEND_BACKTRACE':
+      case 'DEFEND_COUNTERICE':
+      case 'DEFEND_LOCKDOWN':
+        return { error: 'No active intrusions to target.' };
+
+      // Market commands - mock responses
+      case 'MARKET_LIST':
+        return {
+          success: true,
+          orders: [], // No orders in single-player mock
+          myOrders: [],
+        };
+
+      case 'MARKET_SELL':
+        return { error: 'Market not available in offline mode.' };
+
+      case 'MARKET_BUY':
+        return { error: 'Market not available in offline mode.' };
+
+      // Rig/Repair - mock responses
+      case 'RIG_STATUS':
+        return {
+          integrity: 100,
+          maxIntegrity: 100,
+          isDegraded: false,
+          degradedPenalty: 0,
+          repairCost: 0,
+        };
+
+      case 'REPAIR':
+        return { error: 'Rig is at full integrity.' };
+
+      // Chat & Reputation - mock responses
+      case 'CHAT_SEND':
+        return { success: true };
+
+      case 'GET_REPUTATION':
+        return {
+          ip: this.state.player.ip,
+          reputation: 50,
+          title: 'Script Kiddie',
+          successfulHacks: 5,
+          tracedCount: 1,
+          trades: 3,
+        };
+
+      case 'GET_SKILLS':
+        return {
+          specialization: null,
+          unlockedSkills: [],
+          paths: [
+            { id: 'infiltrator', name: 'Infiltrator', icon: '🔓', description: 'Master of stealth.', skills: [] },
+            { id: 'sentinel', name: 'Sentinel', icon: '🛡️', description: 'Network defender.', skills: [] },
+            { id: 'broker', name: 'Broker', icon: '💰', description: 'Information trader.', skills: [] },
+          ],
+          respecCost: 5000,
+        };
+
+      case 'CHOOSE_SPEC':
+      case 'LEARN_SKILL':
+        return { error: 'Specialization not available in offline mode.' };
+
       default:
         return { error: 'Unknown message type.' };
     }

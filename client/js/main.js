@@ -217,6 +217,48 @@ class App {
       case 'sethome':
         await this.cmdSetHome();
         break;
+      case 'defend':
+        await this.cmdDefend();
+        break;
+      case 'backtrace':
+        await this.cmdBacktrace(args);
+        break;
+      case 'counterice':
+        await this.cmdCounterIce(args);
+        break;
+      case 'lockdown':
+        await this.cmdLockdown(args);
+        break;
+      case 'market':
+        await this.cmdMarket(args);
+        break;
+      case 'sell':
+        await this.cmdSell(args);
+        break;
+      case 'buy':
+        await this.cmdBuy(args);
+        break;
+      case 'repair':
+        await this.cmdRepair();
+        break;
+      case 'rig':
+        await this.cmdRig();
+        break;
+      case 'say':
+        await this.cmdSay(args);
+        break;
+      case 'shout':
+        await this.cmdShout(args);
+        break;
+      case 'rep':
+        await this.cmdRep(args);
+        break;
+      case 'skills':
+        await this.cmdSkills();
+        break;
+      case 'spec':
+        await this.cmdSpec(args);
+        break;
       default:
         this.terminal.print(`Unknown command: ${cmd}`, 'error');
         this.terminal.print('Type "help" for available commands.', 'system');
@@ -1245,6 +1287,371 @@ class App {
 
     this.terminal.print(`Home set to: ${result.home}`, 'success');
     this.terminal.print('You will respawn here if traced.', 'system');
+  }
+
+  // === DEFENDER COUNTER-PLAY COMMANDS ===
+
+  async cmdDefend() {
+    this.terminal.print('Scanning for intrusions on your networks...', 'system');
+
+    const result = await this.game.sendMessage('DEFEND_VIEW', {});
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print('', '');
+    this.terminal.print('=== NETWORK DEFENSE ===', 'info');
+
+    if (result.intrusions.length === 0) {
+      this.terminal.print('No active intrusions detected.', 'success');
+    } else {
+      this.terminal.print(`ACTIVE INTRUSIONS: ${result.intrusions.length}`, 'warning');
+      this.terminal.print('');
+
+      for (const intr of result.intrusions) {
+        this.terminal.print(`[${intr.id.slice(0, 8)}] Network: ${intr.networkId}`, 'error');
+        this.terminal.print(`  Node: ${intr.attackerNode} | Duration: ${intr.duration}s`, 'system');
+        this.terminal.print(`  Trace: ${intr.traceProgress.toFixed(1)}%`, 'warning');
+      }
+    }
+
+    this.terminal.print('');
+    this.terminal.print('COUNTER-PROGRAMS:', 'info');
+    for (const prog of result.counterPrograms) {
+      this.terminal.print(`  ${prog.name} (${prog.cost} CR) - ${prog.description}`, 'system');
+    }
+
+    this.terminal.print('');
+    this.terminal.print('Commands: backtrace <id>, counterice <id>, lockdown <networkId>', 'info');
+  }
+
+  async cmdBacktrace(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: backtrace <intrusion_id>', 'error');
+      this.terminal.print('Use "defend" to see active intrusions.', 'system');
+      return;
+    }
+
+    const intrusionId = args[0];
+    const result = await this.game.sendMessage('DEFEND_BACKTRACE', { intrusionId });
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print(`${result.program} initiated!`, 'success');
+    this.terminal.print(`Tracing attacker... ETA: ${result.duration}s`, 'warning');
+    this.terminal.print(`Cost: -${result.program === 'Backtrace' ? 500 : 0} CR`, 'system');
+  }
+
+  async cmdCounterIce(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: counterice <intrusion_id>', 'error');
+      return;
+    }
+
+    const intrusionId = args[0];
+    const result = await this.game.sendMessage('DEFEND_COUNTERICE', { intrusionId });
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print(`${result.program} deployed!`, 'success');
+    this.terminal.print(`Attacking intruder hardware... Impact in ${result.duration}s`, 'warning');
+  }
+
+  async cmdLockdown(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: lockdown <network_id>', 'error');
+      this.terminal.print('WARNING: Locks network for 5 minutes!', 'warning');
+      return;
+    }
+
+    const networkId = args[0];
+    const result = await this.game.sendMessage('DEFEND_LOCKDOWN', { networkId });
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print('EMERGENCY LOCKDOWN ACTIVATED!', 'error');
+    this.terminal.print(`Disconnected ${result.disconnected} intruder(s).`, 'success');
+    this.terminal.print(`Network locked for ${result.lockDuration}s`, 'warning');
+  }
+
+  // === MARKET ECONOMY COMMANDS ===
+
+  async cmdMarket(args) {
+    this.terminal.print('Checking market orders...', 'system');
+
+    const resourceType = args[0] || null;
+    const result = await this.game.sendMessage('MARKET_LIST', { resourceType });
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print('', '');
+    this.terminal.print('=== BLACK MARKET ===', 'info');
+
+    if (result.orders.length === 0) {
+      this.terminal.print('No orders available.', 'system');
+    } else {
+      this.terminal.print('SELL ORDERS:', 'warning');
+      for (const order of result.orders) {
+        this.terminal.print(
+          `  [${order.id.slice(-8)}] ${order.amount}x ${order.resource} @ ${order.pricePerUnit} CR/ea (${order.total} CR total)`,
+          'system'
+        );
+        this.terminal.print(`    Seller: ${order.seller} | Expires: ${order.expiresIn}min`, 'system');
+      }
+    }
+
+    if (result.myOrders && result.myOrders.length > 0) {
+      this.terminal.print('', '');
+      this.terminal.print('YOUR ORDERS:', 'info');
+      for (const order of result.myOrders) {
+        this.terminal.print(
+          `  [${order.id.slice(-8)}] ${order.amount}x ${order.resource} @ ${order.pricePerUnit} CR/ea`,
+          'success'
+        );
+      }
+    }
+
+    this.terminal.print('', '');
+    this.terminal.print('Commands: sell <resource> <amount> <price>, buy <orderId>', 'info');
+  }
+
+  async cmdSell(args) {
+    if (args.length < 3) {
+      this.terminal.print('Usage: sell <resource> <amount> <price_per_unit>', 'error');
+      this.terminal.print('Example: sell data_packets 100 5', 'system');
+      return;
+    }
+
+    const resourceType = args[0];
+    const amount = parseInt(args[1]);
+    const pricePerUnit = parseInt(args[2]);
+
+    if (isNaN(amount) || isNaN(pricePerUnit)) {
+      this.terminal.print('Amount and price must be numbers.', 'error');
+      return;
+    }
+
+    const result = await this.game.sendMessage('MARKET_SELL', { resourceType, amount, pricePerUnit });
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print(`Listed: ${amount}x ${resourceType} @ ${pricePerUnit} CR each`, 'success');
+    this.terminal.print(`Total: ${amount * pricePerUnit} CR | Listing fee: -${result.fee} CR`, 'system');
+    this.terminal.print(`Order ID: ${result.orderId}`, 'info');
+  }
+
+  async cmdBuy(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: buy <order_id>', 'error');
+      this.terminal.print('Use "market" to see available orders.', 'system');
+      return;
+    }
+
+    // User can provide partial ID
+    let orderId = args[0];
+
+    const result = await this.game.sendMessage('MARKET_BUY', { orderId });
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print(`Purchased: ${result.bought.amount}x ${result.bought.resource}`, 'success');
+    this.terminal.print(`Paid: -${result.paid} CR | Balance: ${result.credits} CR`, 'system');
+  }
+
+  // === RIG & REPAIR COMMANDS ===
+
+  async cmdRig() {
+    const result = await this.game.sendMessage('RIG_STATUS', {});
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print('=== RIG STATUS ===', 'info');
+
+    const integrityColor = result.integrity > 50 ? 'success' :
+      result.integrity > 25 ? 'warning' : 'error';
+    this.terminal.print(`Integrity: ${result.integrity}/${result.maxIntegrity}`, integrityColor);
+
+    if (result.isDegraded) {
+      this.terminal.print('STATUS: DEGRADED - Performance reduced 50%', 'error');
+    } else if (result.integrity < result.maxIntegrity) {
+      this.terminal.print('STATUS: Damaged', 'warning');
+    } else {
+      this.terminal.print('STATUS: Optimal', 'success');
+    }
+
+    if (result.repairCost > 0) {
+      this.terminal.print(`Repair cost: ${result.repairCost} CR`, 'system');
+      this.terminal.print('Use "repair" to fix at a Safe House.', 'info');
+    }
+  }
+
+  async cmdRepair() {
+    this.terminal.print('Initiating rig repair...', 'system');
+
+    const result = await this.game.sendMessage('REPAIR', {});
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    if (result.partial) {
+      this.terminal.print(`Partial repair: +${result.repaired}% integrity`, 'warning');
+    } else {
+      this.terminal.print(`Full repair: +${result.repaired}% integrity`, 'success');
+    }
+
+    this.terminal.print(`Cost: -${result.cost} CR | Integrity: ${result.rigIntegrity}%`, 'system');
+  }
+
+  // === CHAT & REPUTATION COMMANDS ===
+
+  async cmdSay(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: say <message>', 'error');
+      return;
+    }
+
+    const message = args.join(' ');
+    await this.game.sendMessage('CHAT_SEND', { channel: 'local', message });
+    this.terminal.print(`[LOCAL] You: ${message}`, 'system');
+  }
+
+  async cmdShout(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: shout <message>', 'error');
+      return;
+    }
+
+    const message = args.join(' ');
+    await this.game.sendMessage('CHAT_SEND', { channel: 'global', message });
+    this.terminal.print(`[GLOBAL] You: ${message}`, 'warning');
+  }
+
+  async cmdRep(args) {
+    const targetIp = args[0] || null;
+
+    const result = await this.game.sendMessage('GET_REPUTATION', { targetIp });
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print('=== REPUTATION ===', 'info');
+    this.terminal.print(`Player: ${result.ip}`, 'system');
+    this.terminal.print(`Title: ${result.title}`, 'success');
+    this.terminal.print(`Reputation: ${result.reputation}`, 'system');
+    this.terminal.print(`Hacks: ${result.successfulHacks} | Traced: ${result.tracedCount} | Trades: ${result.trades}`, 'system');
+  }
+
+  // === SPECIALIZATION COMMANDS ===
+
+  async cmdSkills() {
+    const result = await this.game.sendMessage('GET_SKILLS', {});
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print('=== SPECIALIZATION PATHS ===', 'info');
+
+    if (result.specialization) {
+      this.terminal.print(`Your path: ${result.specialization.toUpperCase()}`, 'success');
+    } else {
+      this.terminal.print('No specialization chosen. Use "spec choose <path>"', 'warning');
+    }
+
+    this.terminal.print('');
+
+    for (const path of result.paths) {
+      const isActive = result.specialization === path.id;
+      this.terminal.print(`${path.icon} ${path.name} ${isActive ? '(ACTIVE)' : ''}`, isActive ? 'success' : 'info');
+      this.terminal.print(`  ${path.description}`, 'system');
+
+      for (const skill of path.skills) {
+        const status = skill.unlocked ? '✓' : '○';
+        const color = skill.unlocked ? 'success' : 'system';
+        this.terminal.print(`    ${status} L${skill.level}: ${skill.name} (${skill.cost} CR) - ${skill.effect}`, color);
+      }
+      this.terminal.print('');
+    }
+
+    this.terminal.print(`Respec cost: ${result.respecCost} CR`, 'system');
+  }
+
+  async cmdSpec(args) {
+    if (args.length === 0) {
+      this.terminal.print('Usage: spec choose <path> | spec learn <skill_id>', 'error');
+      this.terminal.print('Paths: infiltrator, sentinel, broker', 'system');
+      return;
+    }
+
+    const subCmd = args[0];
+
+    if (subCmd === 'choose') {
+      const specId = args[1];
+      if (!specId) {
+        this.terminal.print('Usage: spec choose <infiltrator|sentinel|broker>', 'error');
+        return;
+      }
+
+      const result = await this.game.sendMessage('CHOOSE_SPEC', { specId });
+
+      if (result.error) {
+        this.terminal.print(result.error, 'error');
+        return;
+      }
+
+      this.terminal.print(`Specialization chosen: ${result.name}`, 'success');
+      this.terminal.print(result.description, 'system');
+
+    } else if (subCmd === 'learn') {
+      const skillId = args[1];
+      if (!skillId) {
+        this.terminal.print('Usage: spec learn <skill_id>', 'error');
+        this.terminal.print('Use "skills" to see available skills.', 'system');
+        return;
+      }
+
+      const result = await this.game.sendMessage('LEARN_SKILL', { skillId });
+
+      if (result.error) {
+        this.terminal.print(result.error, 'error');
+        return;
+      }
+
+      this.terminal.print(`Skill learned: ${result.skill}`, 'success');
+      this.terminal.print(`Effect: ${result.effect}`, 'info');
+      this.terminal.print(`Cost: -${result.cost} CR | Balance: ${result.credits} CR`, 'system');
+
+    } else {
+      this.terminal.print('Unknown subcommand. Use: spec choose <path> | spec learn <skill_id>', 'error');
+    }
   }
 }
 

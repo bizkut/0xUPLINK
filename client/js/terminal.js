@@ -30,6 +30,36 @@ export class Terminal {
   }
 
   onKeyDown(e) {
+    // Ctrl+key shortcuts
+    if (e.ctrlKey) {
+      switch (e.key.toLowerCase()) {
+        case 'd':
+          e.preventDefault();
+          this.executeCommand('disconnect');
+          return;
+        case 's':
+          e.preventDefault();
+          this.executeCommand('status');
+          return;
+        case 'h':
+          e.preventDefault();
+          this.executeCommand('help');
+          return;
+        case 'l':
+          e.preventDefault();
+          this.clear();
+          return;
+        case 'r':
+          e.preventDefault();
+          this.executeCommand('rig');
+          return;
+        case 'm':
+          e.preventDefault();
+          this.executeCommand('market');
+          return;
+      }
+    }
+
     switch (e.key) {
       case 'Enter':
         e.preventDefault();
@@ -73,7 +103,7 @@ export class Terminal {
   submitCommand() {
     const input = this.input.value.trim();
     this.hideAutocomplete();
-    
+
     if (input.length === 0) return;
 
     // Add to history
@@ -99,11 +129,11 @@ export class Terminal {
 
   navigateHistory(direction) {
     const newIndex = this.historyIndex + direction;
-    
+
     if (newIndex < 0 || newIndex > this.history.length) return;
-    
+
     this.historyIndex = newIndex;
-    
+
     if (newIndex === this.history.length) {
       this.input.value = '';
     } else {
@@ -112,8 +142,38 @@ export class Terminal {
   }
 
   showAutocomplete(value) {
-    const matches = COMMANDS.filter(c => 
-      c.cmd.startsWith(value.toLowerCase().split(' ')[0])
+    const parts = value.toLowerCase().split(' ');
+    const cmd = parts[0];
+
+    // If we have a command and are typing arguments, show contextual suggestions
+    if (parts.length > 1) {
+      const contextualSuggestions = this.getContextualSuggestions(cmd, parts.slice(1).join(' '));
+
+      if (contextualSuggestions.length > 0) {
+        this.autocomplete.innerHTML = contextualSuggestions.map((s, i) => `
+          <div class="autocomplete-item ${i === this.selectedAutocomplete ? 'selected' : ''}" data-cmd="${cmd} ${s.value}">
+            <span class="cmd">${s.value}</span>
+            <span class="desc">${s.desc}</span>
+          </div>
+        `).join('');
+
+        this.autocomplete.querySelectorAll('.autocomplete-item').forEach(item => {
+          item.addEventListener('click', () => {
+            this.input.value = item.dataset.cmd + ' ';
+            this.hideAutocomplete();
+            this.input.focus();
+          });
+        });
+
+        this.autocomplete.classList.add('visible');
+        this.selectedAutocomplete = 0;
+        return;
+      }
+    }
+
+    // Standard command autocomplete
+    const matches = COMMANDS.filter(c =>
+      c.cmd.startsWith(cmd)
     );
 
     if (matches.length === 0) {
@@ -138,6 +198,43 @@ export class Terminal {
 
     this.autocomplete.classList.add('visible');
     this.selectedAutocomplete = 0;
+  }
+
+  getContextualSuggestions(cmd, partial) {
+    const resourceTypes = [
+      { value: 'data_packets', desc: 'Common data resource' },
+      { value: 'bandwidth_tokens', desc: 'Network bandwidth' },
+      { value: 'encryption_keys', desc: 'Security resource' },
+      { value: 'access_tokens', desc: 'Access credentials' },
+      { value: 'zero_days', desc: 'Rare exploit (DarkNet)' },
+      { value: 'quantum_cores', desc: 'Ultra-rare resource' },
+    ];
+
+    // Commands that take resource types
+    if (['sell', 'store', 'retrieve', 'market'].includes(cmd)) {
+      return resourceTypes.filter(r => r.value.startsWith(partial));
+    }
+
+    // Commands that take node types
+    if (cmd === 'move') {
+      const nodes = ['gateway', 'database', 'firewall', 'logs', 'core', 'vault'];
+      return nodes
+        .filter(n => n.startsWith(partial))
+        .map(n => ({ value: n, desc: 'Node type' }));
+    }
+
+    // Crew commands
+    if (cmd === 'crew') {
+      const subCmds = [
+        { value: 'create', desc: 'Create new crew' },
+        { value: 'invite', desc: 'Invite player' },
+        { value: 'info', desc: 'Show crew info' },
+        { value: 'leave', desc: 'Leave crew' },
+      ];
+      return subCmds.filter(s => s.value.startsWith(partial));
+    }
+
+    return [];
   }
 
   hideAutocomplete() {

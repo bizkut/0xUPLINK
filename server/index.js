@@ -15,7 +15,7 @@ import {
   isGhostExpired,
   getGhostTimeRemaining,
 } from '../shared/universe.js';
-import { SECURITY_ZONES, SECTORS, FACTIONS, GHOST_NETWORK_CONFIG, SAFE_HOUSE_TYPES } from '../shared/constants.js';
+import { SECURITY_ZONES, SECTORS, FACTIONS, GHOST_NETWORK_CONFIG, SAFE_HOUSE_TYPES, COUNTER_PROGRAMS, INTRUSION_CONFIG, MARKET_CONFIG, TRADEABLE_RESOURCES, DEATH_CONFIG, CHAT_CONFIG, REPUTATION_CONFIG, SPECIALIZATION_CONFIG } from '../shared/constants.js';
 import {
   generateNPCSafeHouse,
   findSafeHouseAtNetwork,
@@ -23,6 +23,15 @@ import {
   getEmptyAssetStorage,
   createRig,
 } from '../shared/safehouses.js';
+import {
+  createIntrusion,
+  shouldAlertOwner,
+  markDetected,
+  updateAttackerNode,
+  applyCounterProgram,
+  processCounterMeasures,
+  getIntrusionInfo,
+} from '../shared/defender.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -38,6 +47,9 @@ const gameState = {
   universe: null, // The persistent world
   ghostNetworks: new Map(), // Active ghost networks
   safeHouses: new Map(), // Safe Houses for docking and storage
+  intrusions: new Map(), // Active intrusions { networkId -> [intrusions] }
+  lockedNetworks: new Map(), // Networks in lockdown { networkId -> unlockTime }
+  marketOrders: new Map(), // Player market orders { orderId -> order }
   contracts: [],
   factions: {
     syndicate: { members: [], treasury: 0 },
@@ -124,6 +136,13 @@ wss.on('connection', (ws) => {
       zero_days: 0,
       quantum_cores: 0,
     },
+    // Death/Loss system
+    rigIntegrity: DEATH_CONFIG.rigIntegrity.max,
+    homeSafeHouse: null,
+    respawnProtection: 0, // Timestamp when protection ends
+    // Specialization
+    specialization: null, // infiltrator, sentinel, broker
+    skills: [],           // Array of unlocked skill IDs
   };
 
   gameState.players.set(playerId, player);
@@ -240,6 +259,51 @@ function handleMessage(player, message) {
       break;
     case 'SET_HOME':
       handleSetHome(player);
+      break;
+    case 'DEFEND_VIEW':
+      handleDefendView(player);
+      break;
+    case 'DEFEND_BACKTRACE':
+      handleDefendBacktrace(player, payload);
+      break;
+    case 'DEFEND_COUNTERICE':
+      handleDefendCounterIce(player, payload);
+      break;
+    case 'DEFEND_LOCKDOWN':
+      handleDefendLockdown(player, payload);
+      break;
+    case 'MARKET_LIST':
+      handleMarketList(player, payload);
+      break;
+    case 'MARKET_SELL':
+      handleMarketSell(player, payload);
+      break;
+    case 'MARKET_BUY':
+      handleMarketBuy(player, payload);
+      break;
+    case 'MARKET_CANCEL':
+      handleMarketCancel(player, payload);
+      break;
+    case 'REPAIR':
+      handleRepair(player);
+      break;
+    case 'RIG_STATUS':
+      handleRigStatus(player);
+      break;
+    case 'CHAT_SEND':
+      handleChatSend(player, payload);
+      break;
+    case 'GET_REPUTATION':
+      handleGetReputation(player, payload);
+      break;
+    case 'GET_SKILLS':
+      handleGetSkills(player);
+      break;
+    case 'LEARN_SKILL':
+      handleLearnSkill(player, payload);
+      break;
+    case 'CHOOSE_SPEC':
+      handleChooseSpec(player, payload);
       break;
     default:
       console.log('Unknown message type:', type);
@@ -815,6 +879,951 @@ generateNPCServers(); // Legacy NPC servers for backwards compatibility
 spawnNPCSafeHouses(); // Spawn Safe Houses in the universe
 spawnInitialGhostNetworks(); // Spawn some ghost networks on startup
 startGhostSpawnLoop(); // Start periodic ghost spawning
+startIntrusionProcessingLoop(); // Process intrusions and alerts
+startMarketCleanupLoop(); // Clean expired market orders
+
+// Chat & Communications Handlers
+function handleChatSend(player, { channel, message }) {
+  if (!message || message.length === 0) return;
+
+  // Validate and truncate message
+  const cleanMessage = message.slice(0, CHAT_CONFIG.maxMessageLength);
+
+  // Get recipients based on channel
+  const recipients = getChatRecipients(player, channel);
+
+  // Get sender's title
+  const title = getPlayerTitle(player.reputation || 0);
+
+  // Broadcast message
+  const chatMessage = {
+    type: 'CHAT_MESSAGE',
+    payload: {
+      channel,
+      sender: player.ip,
+      title: title.title,
+      titleColor: title.color,
+      message: cleanMessage,
+      timestamp: Date.now(),
+    },
+  };
+
+  for (const recipient of recipients) {
+    if (recipient.online && recipient.ws) {
+      recipient.ws.send(JSON.stringify(chatMessage));
+    }
+  }
+
+  console.log(`[CHAT:${channel.toUpperCase()}] ${player.ip}: ${cleanMessage.slice(0, 50)}...`);
+}
+
+function getChatRecipients(sender, channel) {
+  const recipients = [];
+
+  for (const [, player] of gameState.players) {
+    if (!player.online) continue;
+
+    switch (channel) {
+      case 'local':
+        // Same cluster
+        if (player.location?.clusterId === sender.location?.clusterId) {
+          recipients.push(player);
+        }
+        break;
+      case 'global':
+        // Everyone
+        recipients.push(player);
+        break;
+      case 'crew':
+        // Same organization (if implemented)
+        if (player.organization && player.organization === sender.organization) {
+          recipients.push(player);
+        }
+        break;
+      case 'darknet':
+        // Only in DarkNet zone
+        if (player.location?.zone === 'darknet') {
+          recipients.push(player);
+        }
+        break;
+      default:
+        // Default to global
+        recipients.push(player);
+    }
+  }
+
+  return recipients;
+}
+
+function getPlayerTitle(reputation) {
+  const titles = REPUTATION_CONFIG.titles;
+  for (let i = titles.length - 1; i >= 0; i--) {
+    if (reputation >= titles[i].minRep) {
+      return titles[i];
+    }
+  }
+  return titles[0];
+}
+
+function handleGetReputation(player, { targetIp }) {
+  const target = targetIp
+    ? Array.from(gameState.players.values()).find(p => p.ip === targetIp)
+    : player;
+
+  if (!target) {
+    player.ws.send(JSON.stringify({
+      type: 'REPUTATION_RESULT',
+      payload: { error: 'Player not found.' },
+    }));
+    return;
+  }
+
+  const title = getPlayerTitle(target.reputation || 0);
+
+  player.ws.send(JSON.stringify({
+    type: 'REPUTATION_RESULT',
+    payload: {
+      ip: target.ip,
+      reputation: target.reputation || 0,
+      title: title.title,
+      titleColor: title.color,
+      successfulHacks: target.stats?.hacks || 0,
+      tracedCount: target.stats?.traced || 0,
+      trades: target.stats?.trades || 0,
+    },
+  }));
+}
+
+function adjustReputation(player, action) {
+  const amount = REPUTATION_CONFIG.actions[action];
+  if (amount !== undefined) {
+    player.reputation = (player.reputation || 0) + amount;
+    console.log(`[REP] ${player.ip}: ${action} (${amount > 0 ? '+' : ''}${amount})`);
+  }
+}
+
+// Specialization Handlers
+function handleGetSkills(player) {
+  const paths = Object.values(SPECIALIZATION_CONFIG.paths).map(path => ({
+    id: path.id,
+    name: path.name,
+    description: path.description,
+    icon: path.icon,
+    skills: path.skills.map(s => ({
+      ...s,
+      unlocked: player.skills.includes(s.id),
+    })),
+  }));
+
+  player.ws.send(JSON.stringify({
+    type: 'SKILLS_RESULT',
+    payload: {
+      specialization: player.specialization,
+      unlockedSkills: player.skills,
+      paths,
+      respecCost: SPECIALIZATION_CONFIG.respecCost,
+    },
+  }));
+}
+
+function handleChooseSpec(player, { specId }) {
+  if (player.specialization) {
+    player.ws.send(JSON.stringify({
+      type: 'CHOOSE_SPEC_RESULT',
+      payload: { error: `Already specialized as ${player.specialization}. Use respec to change.` },
+    }));
+    return;
+  }
+
+  const spec = SPECIALIZATION_CONFIG.paths[specId.toUpperCase()];
+  if (!spec) {
+    player.ws.send(JSON.stringify({
+      type: 'CHOOSE_SPEC_RESULT',
+      payload: { error: 'Invalid specialization. Choose: infiltrator, sentinel, or broker.' },
+    }));
+    return;
+  }
+
+  player.specialization = spec.id;
+
+  player.ws.send(JSON.stringify({
+    type: 'CHOOSE_SPEC_RESULT',
+    payload: {
+      success: true,
+      specialization: spec.id,
+      name: spec.name,
+      description: spec.description,
+    },
+  }));
+
+  console.log(`[SPEC] ${player.ip} chose ${spec.name}`);
+}
+
+function handleLearnSkill(player, { skillId }) {
+  if (!player.specialization) {
+    player.ws.send(JSON.stringify({
+      type: 'LEARN_SKILL_RESULT',
+      payload: { error: 'Choose a specialization first with "spec choose <type>".' },
+    }));
+    return;
+  }
+
+  // Find the skill
+  const spec = SPECIALIZATION_CONFIG.paths[player.specialization.toUpperCase()];
+  if (!spec) {
+    player.ws.send(JSON.stringify({
+      type: 'LEARN_SKILL_RESULT',
+      payload: { error: 'Invalid specialization state.' },
+    }));
+    return;
+  }
+
+  const skill = spec.skills.find(s => s.id === skillId);
+  if (!skill) {
+    player.ws.send(JSON.stringify({
+      type: 'LEARN_SKILL_RESULT',
+      payload: { error: 'Skill not found in your specialization.' },
+    }));
+    return;
+  }
+
+  // Check if already learned
+  if (player.skills.includes(skillId)) {
+    player.ws.send(JSON.stringify({
+      type: 'LEARN_SKILL_RESULT',
+      payload: { error: 'Skill already learned.' },
+    }));
+    return;
+  }
+
+  // Check prerequisites (must have previous level skills)
+  const prereqSkills = spec.skills.filter(s => s.level < skill.level);
+  for (const prereq of prereqSkills) {
+    if (!player.skills.includes(prereq.id)) {
+      player.ws.send(JSON.stringify({
+        type: 'LEARN_SKILL_RESULT',
+        payload: { error: `Learn "${prereq.name}" first (level ${prereq.level}).` },
+      }));
+      return;
+    }
+  }
+
+  // Check credits
+  if (player.credits < skill.cost) {
+    player.ws.send(JSON.stringify({
+      type: 'LEARN_SKILL_RESULT',
+      payload: { error: `Insufficient credits. Need ${skill.cost} CR.` },
+    }));
+    return;
+  }
+
+  // Learn skill
+  player.credits -= skill.cost;
+  player.skills.push(skillId);
+
+  player.ws.send(JSON.stringify({
+    type: 'LEARN_SKILL_RESULT',
+    payload: {
+      success: true,
+      skill: skill.name,
+      effect: skill.effect,
+      cost: skill.cost,
+      credits: player.credits,
+    },
+  }));
+
+  console.log(`[SKILL] ${player.ip} learned ${skill.name}`);
+}
+
+// Death/Loss Handlers
+function handlePlayerTraced(player, hunter = null) {
+  const config = DEATH_CONFIG.traceConsequences;
+
+  // Calculate losses
+  const creditLost = Math.floor(player.credits * config.creditLoss);
+  const resourcesLost = {};
+
+  // Lose 50% of carried resources
+  for (const [type, amount] of Object.entries(player.resources)) {
+    const lost = Math.floor(amount * config.cargoLoss);
+    if (lost > 0) {
+      resourcesLost[type] = lost;
+      player.resources[type] -= lost;
+    }
+  }
+
+  // Apply consequences
+  player.credits -= creditLost;
+  player.heat += config.heatGain;
+  player.rigIntegrity = Math.max(0, player.rigIntegrity - config.rigDamage);
+
+  // Reward hunter if applicable
+  let bountyPaid = 0;
+  if (hunter) {
+    bountyPaid = Math.floor(creditLost * config.bountyReward);
+    hunter.credits += bountyPaid;
+
+    if (hunter.online) {
+      hunter.ws.send(JSON.stringify({
+        type: 'BOUNTY_RECEIVED',
+        payload: {
+          target: player.ip,
+          reward: bountyPaid,
+        },
+      }));
+    }
+  }
+
+  // Get respawn location
+  const respawnLocation = getRespawnLocation(player);
+  player.location = respawnLocation;
+  player.respawnProtection = Date.now() + DEATH_CONFIG.respawn.protectionTime;
+
+  // Notify player
+  player.ws.send(JSON.stringify({
+    type: 'TRACED',
+    payload: {
+      message: 'TRACE COMPLETE! You have been caught.',
+      creditLost,
+      resourcesLost,
+      heatGain: config.heatGain,
+      rigDamage: config.rigDamage,
+      rigIntegrity: player.rigIntegrity,
+      respawnLocation: respawnLocation.networkIp,
+      protectionTime: DEATH_CONFIG.respawn.protectionTime / 1000,
+    },
+  }));
+
+  console.log(`[DEATH] ${player.ip} was traced. Lost ${creditLost} CR, rig at ${player.rigIntegrity}%`);
+}
+
+function getRespawnLocation(player) {
+  // If player has a home Safe House set, respawn there
+  if (player.homeSafeHouse) {
+    const safeHouse = gameState.safeHouses.get(player.homeSafeHouse);
+    if (safeHouse) {
+      const network = gameState.universe.networks[safeHouse.networkId];
+      if (network) {
+        return {
+          networkId: network.id,
+          networkIp: network.ip,
+          clusterId: network.clusterId,
+          sectorId: network.sectorId,
+          zone: network.zone,
+        };
+      }
+    }
+  }
+
+  // Otherwise, respawn in random ClearNet location
+  return getStartingLocation(gameState.universe);
+}
+
+function handleRepair(player) {
+  const maxIntegrity = DEATH_CONFIG.rigIntegrity.max;
+  const costPerPoint = DEATH_CONFIG.rigIntegrity.repairCostPerPoint;
+
+  const damageToRepair = maxIntegrity - player.rigIntegrity;
+
+  if (damageToRepair === 0) {
+    player.ws.send(JSON.stringify({
+      type: 'REPAIR_RESULT',
+      payload: { error: 'Rig is at full integrity.' },
+    }));
+    return;
+  }
+
+  const totalCost = damageToRepair * costPerPoint;
+
+  if (player.credits < totalCost) {
+    // Partial repair
+    const pointsAffordable = Math.floor(player.credits / costPerPoint);
+    if (pointsAffordable === 0) {
+      player.ws.send(JSON.stringify({
+        type: 'REPAIR_RESULT',
+        payload: { error: `Insufficient credits. Full repair costs ${totalCost} CR.` },
+      }));
+      return;
+    }
+
+    player.rigIntegrity += pointsAffordable;
+    player.credits -= pointsAffordable * costPerPoint;
+
+    player.ws.send(JSON.stringify({
+      type: 'REPAIR_RESULT',
+      payload: {
+        success: true,
+        repaired: pointsAffordable,
+        cost: pointsAffordable * costPerPoint,
+        rigIntegrity: player.rigIntegrity,
+        credits: player.credits,
+        partial: true,
+      },
+    }));
+  } else {
+    player.rigIntegrity = maxIntegrity;
+    player.credits -= totalCost;
+
+    player.ws.send(JSON.stringify({
+      type: 'REPAIR_RESULT',
+      payload: {
+        success: true,
+        repaired: damageToRepair,
+        cost: totalCost,
+        rigIntegrity: player.rigIntegrity,
+        credits: player.credits,
+      },
+    }));
+  }
+
+  console.log(`[REPAIR] ${player.ip} repaired rig to ${player.rigIntegrity}%`);
+}
+
+function handleRigStatus(player) {
+  const integrity = player.rigIntegrity;
+  const degradedThreshold = DEATH_CONFIG.rigIntegrity.degradedThreshold;
+  const isDegraded = integrity <= degradedThreshold;
+
+  player.ws.send(JSON.stringify({
+    type: 'RIG_STATUS_RESULT',
+    payload: {
+      integrity,
+      maxIntegrity: DEATH_CONFIG.rigIntegrity.max,
+      isDegraded,
+      degradedPenalty: isDegraded ? DEATH_CONFIG.rigIntegrity.degradedPenalty : 0,
+      repairCost: (DEATH_CONFIG.rigIntegrity.max - integrity) * DEATH_CONFIG.rigIntegrity.repairCostPerPoint,
+    },
+  }));
+}
+
+// Market Handlers
+function handleMarketList(player, { resourceType }) {
+  let orders = Array.from(gameState.marketOrders.values());
+
+  // Filter expired orders
+  const now = Date.now();
+  orders = orders.filter(o => o.expiresAt > now);
+
+  // Filter by resource type if specified
+  if (resourceType && TRADEABLE_RESOURCES.includes(resourceType)) {
+    orders = orders.filter(o => o.resourceType === resourceType);
+  }
+
+  // Don't show player's own orders in market view (they use separate command)
+  const marketOrders = orders.filter(o => o.sellerId !== player.id);
+  const myOrders = orders.filter(o => o.sellerId === player.id);
+
+  player.ws.send(JSON.stringify({
+    type: 'MARKET_LIST_RESULT',
+    payload: {
+      success: true,
+      orders: marketOrders.map(o => ({
+        id: o.id,
+        seller: o.sellerName,
+        resource: o.resourceType,
+        amount: o.amount,
+        pricePerUnit: o.pricePerUnit,
+        total: o.totalPrice,
+        expiresIn: Math.floor((o.expiresAt - now) / 60000), // minutes
+      })),
+      myOrders: myOrders.map(o => ({
+        id: o.id,
+        resource: o.resourceType,
+        amount: o.amount,
+        pricePerUnit: o.pricePerUnit,
+        total: o.totalPrice,
+      })),
+    },
+  }));
+}
+
+function handleMarketSell(player, { resourceType, amount, pricePerUnit }) {
+  // Validate resource type
+  if (!TRADEABLE_RESOURCES.includes(resourceType)) {
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_SELL_RESULT',
+      payload: { error: `Invalid resource type. Tradeable: ${TRADEABLE_RESOURCES.join(', ')}` },
+    }));
+    return;
+  }
+
+  // Validate amount
+  const available = player.resources?.[resourceType] || 0;
+  if (amount <= 0 || amount > available) {
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_SELL_RESULT',
+      payload: { error: `Invalid amount. You have ${available} ${resourceType}.` },
+    }));
+    return;
+  }
+
+  // Validate price
+  if (pricePerUnit < MARKET_CONFIG.minPrice || pricePerUnit > MARKET_CONFIG.maxPrice) {
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_SELL_RESULT',
+      payload: { error: `Price must be between ${MARKET_CONFIG.minPrice} and ${MARKET_CONFIG.maxPrice} CR.` },
+    }));
+    return;
+  }
+
+  // Check listing fee
+  if (player.credits < MARKET_CONFIG.listingFee) {
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_SELL_RESULT',
+      payload: { error: `Insufficient credits for listing fee (${MARKET_CONFIG.listingFee} CR).` },
+    }));
+    return;
+  }
+
+  // Check max active orders
+  const playerOrders = Array.from(gameState.marketOrders.values()).filter(o => o.sellerId === player.id);
+  if (playerOrders.length >= MARKET_CONFIG.maxActiveOrders) {
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_SELL_RESULT',
+      payload: { error: `Max active orders reached (${MARKET_CONFIG.maxActiveOrders}).` },
+    }));
+    return;
+  }
+
+  // Create order
+  const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  const order = {
+    id: orderId,
+    sellerId: player.id,
+    sellerName: player.ip, // Use IP as identifier
+    resourceType,
+    amount,
+    pricePerUnit,
+    totalPrice: amount * pricePerUnit,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + MARKET_CONFIG.orderExpiry,
+  };
+
+  // Deduct resources and listing fee
+  player.resources[resourceType] -= amount;
+  player.credits -= MARKET_CONFIG.listingFee;
+
+  gameState.marketOrders.set(orderId, order);
+
+  player.ws.send(JSON.stringify({
+    type: 'MARKET_SELL_RESULT',
+    payload: {
+      success: true,
+      orderId,
+      listed: { resource: resourceType, amount, pricePerUnit },
+      fee: MARKET_CONFIG.listingFee,
+      credits: player.credits,
+    },
+  }));
+
+  console.log(`[MARKET] ${player.ip} listed ${amount}x ${resourceType} @ ${pricePerUnit} CR each`);
+}
+
+function handleMarketBuy(player, { orderId }) {
+  const order = gameState.marketOrders.get(orderId);
+
+  if (!order) {
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_BUY_RESULT',
+      payload: { error: 'Order not found or expired.' },
+    }));
+    return;
+  }
+
+  // Can't buy own order
+  if (order.sellerId === player.id) {
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_BUY_RESULT',
+      payload: { error: 'Cannot buy your own order.' },
+    }));
+    return;
+  }
+
+  // Check buyer credits
+  if (player.credits < order.totalPrice) {
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_BUY_RESULT',
+      payload: { error: `Insufficient credits. Need ${order.totalPrice} CR.` },
+    }));
+    return;
+  }
+
+  // Execute trade
+  const fee = Math.floor(order.totalPrice * MARKET_CONFIG.transactionFee);
+  const sellerReceives = order.totalPrice - fee;
+
+  // Deduct from buyer
+  player.credits -= order.totalPrice;
+  player.resources[order.resourceType] = (player.resources[order.resourceType] || 0) + order.amount;
+
+  // Credit seller
+  const seller = gameState.players.get(order.sellerId);
+  if (seller) {
+    seller.credits += sellerReceives;
+
+    // Notify seller if online
+    if (seller.online) {
+      seller.ws.send(JSON.stringify({
+        type: 'MARKET_SALE_NOTIFICATION',
+        payload: {
+          resource: order.resourceType,
+          amount: order.amount,
+          received: sellerReceives,
+          buyer: player.ip,
+        },
+      }));
+    }
+  }
+
+  // Remove order
+  gameState.marketOrders.delete(orderId);
+
+  player.ws.send(JSON.stringify({
+    type: 'MARKET_BUY_RESULT',
+    payload: {
+      success: true,
+      bought: { resource: order.resourceType, amount: order.amount },
+      paid: order.totalPrice,
+      credits: player.credits,
+    },
+  }));
+
+  console.log(`[MARKET] ${player.ip} bought ${order.amount}x ${order.resourceType} from ${order.sellerName}`);
+}
+
+function handleMarketCancel(player, { orderId }) {
+  const order = gameState.marketOrders.get(orderId);
+
+  if (!order || order.sellerId !== player.id) {
+    player.ws.send(JSON.stringify({
+      type: 'MARKET_CANCEL_RESULT',
+      payload: { error: 'Order not found or not yours.' },
+    }));
+    return;
+  }
+
+  // Return resources to seller
+  player.resources[order.resourceType] = (player.resources[order.resourceType] || 0) + order.amount;
+
+  gameState.marketOrders.delete(orderId);
+
+  player.ws.send(JSON.stringify({
+    type: 'MARKET_CANCEL_RESULT',
+    payload: {
+      success: true,
+      returned: { resource: order.resourceType, amount: order.amount },
+    },
+  }));
+}
+
+function startMarketCleanupLoop() {
+  // Every 5 minutes, clean expired orders
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, order] of gameState.marketOrders) {
+      if (order.expiresAt <= now) {
+        // Return resources to seller
+        const seller = gameState.players.get(order.sellerId);
+        if (seller) {
+          seller.resources[order.resourceType] = (seller.resources[order.resourceType] || 0) + order.amount;
+
+          if (seller.online) {
+            seller.ws.send(JSON.stringify({
+              type: 'MARKET_ORDER_EXPIRED',
+              payload: {
+                resource: order.resourceType,
+                amount: order.amount,
+                returned: true,
+              },
+            }));
+          }
+        }
+        gameState.marketOrders.delete(id);
+        console.log(`[MARKET] Order ${id} expired`);
+      }
+    }
+  }, 300000); // 5 minutes
+}
+function handleDefendView(player) {
+  // Get all intrusions on networks owned by this player
+  const ownedIntrusions = [];
+
+  for (const [networkId, intrusions] of gameState.intrusions) {
+    const network = gameState.universe.networks[networkId];
+    // Check if player owns this network (for now, using player's own server)
+    if (network && network.ownerId === player.id) {
+      for (const intrusion of intrusions) {
+        if (intrusion.status === 'active') {
+          ownedIntrusions.push(getIntrusionInfo(intrusion));
+        }
+      }
+    }
+  }
+
+  player.ws.send(JSON.stringify({
+    type: 'DEFEND_VIEW_RESULT',
+    payload: {
+      success: true,
+      intrusions: ownedIntrusions,
+      counterPrograms: Object.values(COUNTER_PROGRAMS).map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        cost: p.cost,
+      })),
+    },
+  }));
+}
+
+function handleDefendBacktrace(player, { intrusionId }) {
+  const result = applyDefenderAction(player, intrusionId, 'BACKTRACE');
+
+  player.ws.send(JSON.stringify({
+    type: 'DEFEND_BACKTRACE_RESULT',
+    payload: result,
+  }));
+}
+
+function handleDefendCounterIce(player, { intrusionId }) {
+  const result = applyDefenderAction(player, intrusionId, 'COUNTER_ICE');
+
+  player.ws.send(JSON.stringify({
+    type: 'DEFEND_COUNTERICE_RESULT',
+    payload: result,
+  }));
+}
+
+function handleDefendLockdown(player, { networkId }) {
+  // Find all active intrusions on this network
+  const intrusions = gameState.intrusions.get(networkId) || [];
+  const activeIntrusions = intrusions.filter(i => i.status === 'active');
+
+  if (activeIntrusions.length === 0) {
+    player.ws.send(JSON.stringify({
+      type: 'DEFEND_LOCKDOWN_RESULT',
+      payload: { error: 'No active intrusions on this network.' },
+    }));
+    return;
+  }
+
+  // Check cost
+  const cost = COUNTER_PROGRAMS.LOCKDOWN.cost;
+  if (player.credits < cost) {
+    player.ws.send(JSON.stringify({
+      type: 'DEFEND_LOCKDOWN_RESULT',
+      payload: { error: `Insufficient credits. Lockdown costs ${cost} CR.` },
+    }));
+    return;
+  }
+
+  // Deduct cost
+  player.credits -= cost;
+
+  // Lock the network
+  const lockDuration = COUNTER_PROGRAMS.LOCKDOWN.lockDuration;
+  gameState.lockedNetworks.set(networkId, Date.now() + lockDuration);
+
+  // Disconnect all intruders
+  for (const intrusion of activeIntrusions) {
+    intrusion.status = 'lockdown';
+
+    // Notify the attacker
+    const attacker = gameState.players.get(intrusion.attackerId);
+    if (attacker && attacker.online) {
+      attacker.ws.send(JSON.stringify({
+        type: 'DEFENDER_ACTION',
+        payload: {
+          action: 'lockdown',
+          message: 'EMERGENCY LOCKDOWN! You have been forcibly disconnected.',
+          networkId,
+        },
+      }));
+    }
+  }
+
+  player.ws.send(JSON.stringify({
+    type: 'DEFEND_LOCKDOWN_RESULT',
+    payload: {
+      success: true,
+      disconnected: activeIntrusions.length,
+      lockDuration: lockDuration / 1000,
+      credits: player.credits,
+    },
+  }));
+
+  console.log(`[DEFEND] ${player.id} locked down network ${networkId}`);
+}
+
+function applyDefenderAction(player, intrusionId, programType) {
+  // Find the intrusion
+  let targetIntrusion = null;
+  let targetNetworkId = null;
+
+  for (const [networkId, intrusions] of gameState.intrusions) {
+    const found = intrusions.find(i => i.id === intrusionId);
+    if (found) {
+      targetIntrusion = found;
+      targetNetworkId = networkId;
+      break;
+    }
+  }
+
+  if (!targetIntrusion) {
+    return { error: 'Intrusion not found.' };
+  }
+
+  // Verify ownership
+  const network = gameState.universe.networks[targetNetworkId];
+  if (!network || network.ownerId !== player.id) {
+    return { error: 'You do not own this network.' };
+  }
+
+  // Check cost
+  const program = COUNTER_PROGRAMS[programType];
+  if (player.credits < program.cost) {
+    return { error: `Insufficient credits. ${program.name} costs ${program.cost} CR.` };
+  }
+
+  // Deduct cost and apply
+  player.credits -= program.cost;
+  const result = applyCounterProgram(targetIntrusion, programType, player.id);
+
+  if (result.error) {
+    player.credits += program.cost; // Refund
+    return result;
+  }
+
+  // Notify attacker that counter-measure is active
+  const attacker = gameState.players.get(targetIntrusion.attackerId);
+  if (attacker && attacker.online) {
+    attacker.ws.send(JSON.stringify({
+      type: 'DEFENDER_ACTION',
+      payload: {
+        action: programType.toLowerCase(),
+        message: `WARNING: ${program.name} detected!`,
+        duration: program.duration,
+      },
+    }));
+  }
+
+  return {
+    success: true,
+    program: program.name,
+    duration: program.duration / 1000,
+    credits: player.credits,
+  };
+}
+
+// Track intrusion when player connects to a network
+function trackIntrusion(attackerId, attackerIp, networkId) {
+  const network = gameState.universe.networks[networkId];
+  if (!network || !network.ownerId) return null;
+
+  // Don't track intrusions on NPC networks for now
+  if (network.ownerId === 'npc') return null;
+
+  const intrusion = createIntrusion(networkId, attackerId, attackerIp);
+
+  if (!gameState.intrusions.has(networkId)) {
+    gameState.intrusions.set(networkId, []);
+  }
+  gameState.intrusions.get(networkId).push(intrusion);
+
+  console.log(`[INTRUSION] ${attackerIp} -> ${networkId}`);
+  return intrusion;
+}
+
+// Remove intrusion when player disconnects
+function removeIntrusion(attackerId, networkId) {
+  const intrusions = gameState.intrusions.get(networkId);
+  if (!intrusions) return;
+
+  const index = intrusions.findIndex(i => i.attackerId === attackerId && i.status === 'active');
+  if (index !== -1) {
+    intrusions[index].status = 'escaped';
+  }
+}
+
+// Process intrusions and counter-measures
+function startIntrusionProcessingLoop() {
+  setInterval(() => {
+    for (const [networkId, intrusions] of gameState.intrusions) {
+      const network = gameState.universe.networks[networkId];
+
+      for (const intrusion of intrusions) {
+        if (intrusion.status !== 'active') continue;
+
+        // Check if owner should be alerted
+        if (!intrusion.detected && shouldAlertOwner(intrusion)) {
+          markDetected(intrusion);
+
+          // Send alert to owner
+          const owner = gameState.players.get(network?.ownerId);
+          if (owner && owner.online) {
+            owner.ws.send(JSON.stringify({
+              type: 'INTRUSION_ALERT',
+              payload: {
+                networkId,
+                networkName: network.owner,
+                attackerNode: intrusion.attackerNode,
+                message: 'INTRUSION DETECTED! Someone is hacking your network.',
+              },
+            }));
+          }
+        }
+
+        // Process completed counter-measures
+        const effects = processCounterMeasures(intrusion);
+
+        for (const effect of effects) {
+          switch (effect.type) {
+            case 'backtrace_complete': {
+              // Notify defender
+              const owner = gameState.players.get(network?.ownerId);
+              if (owner && owner.online) {
+                owner.ws.send(JSON.stringify({
+                  type: 'BACKTRACE_COMPLETE',
+                  payload: {
+                    attackerIp: effect.attackerIp,
+                    message: `Backtrace complete! Attacker IP: ${effect.attackerIp}`,
+                  },
+                }));
+              }
+              break;
+            }
+
+            case 'counter_ice_hit': {
+              // Damage attacker's hardware
+              const attacker = gameState.players.get(effect.attackerId);
+              if (attacker && attacker.online) {
+                // Apply damage (would need to track hardware on server)
+                attacker.ws.send(JSON.stringify({
+                  type: 'DEFENDER_ACTION',
+                  payload: {
+                    action: 'counter_ice_hit',
+                    damage: effect.damage,
+                    message: `COUNTER-ICE HIT! Hardware integrity -${effect.damage}%`,
+                  },
+                }));
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Clean up expired lockdowns
+    const now = Date.now();
+    for (const [networkId, unlockTime] of gameState.lockedNetworks) {
+      if (now >= unlockTime) {
+        gameState.lockedNetworks.delete(networkId);
+        console.log(`[DEFEND] Network ${networkId} lockdown expired`);
+      }
+    }
+
+  }, INTRUSION_CONFIG.traceUpdateInterval);
+}
 
 // Safe House spawning
 function spawnNPCSafeHouses() {

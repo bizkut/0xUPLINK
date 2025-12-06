@@ -139,6 +139,49 @@ Temporary high-value networks that appear randomly (like EVE wormholes):
 | `sov deploy <type>` | Deploy structure |
 | `siege <structure>` | Attack structure |
 
+### Market Economy
+| Command | Description |
+|---------|-------------|
+| `market` | View sell orders |
+| `sell <resource> <amt> <price>` | List for sale |
+| `buy <order_id>` | Purchase order |
+
+### Defense
+| Command | Description |
+|---------|-------------|
+| `defend` | View intrusions |
+| `backtrace <id>` | Trace attacker |
+| `counterice <id>` | Damage attacker rig |
+| `lockdown <network>` | Emergency lockdown |
+| `rig` | Check rig status |
+| `repair` | Repair rig damage |
+
+### Communication
+| Command | Description |
+|---------|-------------|
+| `say <message>` | Local chat |
+| `shout <message>` | Global chat |
+| `rep [player]` | Check reputation |
+
+### Keyboard Shortcuts
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+D` | Disconnect |
+| `Ctrl+S` | Status |
+| `Ctrl+H` | Help |
+| `Ctrl+L` | Clear screen |
+| `Ctrl+R` | Rig status |
+| `Ctrl+M` | Market |
+
+### Specialization
+| Command | Description |
+|---------|-------------|
+| `skills` | View all skill paths |
+| `spec choose <path>` | Choose specialization |
+| `spec learn <skill_id>` | Learn a skill |
+
+**Paths**: Infiltrator 🔓, Sentinel 🛡️, Broker 💰
+
 ---
 
 ## 🛠️ Tech Stack

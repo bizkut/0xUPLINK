@@ -402,6 +402,193 @@ export const SAFE_HOUSE_NAMES = {
   ],
 };
 
+// Active Defender Counter-Play Programs
+export const COUNTER_PROGRAMS = {
+  BACKTRACE: {
+    id: 'backtrace',
+    name: 'Backtrace',
+    description: 'Trace the attacker\'s real IP address.',
+    cost: 500,
+    duration: 30000, // 30 seconds to complete
+    cooldown: 60000, // 1 minute cooldown
+    effect: 'reveal_attacker',
+  },
+  COUNTER_ICE: {
+    id: 'counter_ice',
+    name: 'Counter-ICE',
+    description: 'Deploy offensive ICE to damage attacker\'s hardware.',
+    cost: 1000,
+    duration: 5000, // 5 seconds to deploy
+    cooldown: 120000, // 2 minute cooldown
+    effect: 'damage_hardware',
+    damage: 25, // % integrity damage
+  },
+  LOCKDOWN: {
+    id: 'lockdown',
+    name: 'Emergency Lockdown',
+    description: 'Force-disconnect all intruders and lock network.',
+    cost: 2000,
+    duration: 2000, // 2 seconds
+    cooldown: 300000, // 5 minute cooldown
+    effect: 'disconnect_all',
+    lockDuration: 300000, // Network locked for 5 minutes
+  },
+  DATA_WIPE: {
+    id: 'data_wipe',
+    name: 'Emergency Data Wipe',
+    description: 'Destroy sensitive files before theft.',
+    cost: 1500,
+    duration: 3000, // 3 seconds
+    cooldown: 600000, // 10 minute cooldown
+    effect: 'destroy_files',
+  },
+};
+
+// Intrusion alert configuration
+export const INTRUSION_CONFIG = {
+  alertDelay: 5000, // 5 seconds before owner is alerted
+  traceUpdateInterval: 1000, // How often to broadcast trace progress
+  maxActiveIntrusions: 10, // Max intrusions to track per network
+};
+
+// Player Market Economy
+export const MARKET_CONFIG = {
+  listingFee: 10,           // CR to post a sell order
+  transactionFee: 0.05,     // 5% fee on sales
+  maxActiveOrders: 20,      // Max orders per player
+  orderExpiry: 86400000,    // 24 hours in ms
+  minPrice: 1,              // Minimum price per unit
+  maxPrice: 1000000,        // Maximum price per unit
+};
+
+// Tradeable resource types
+export const TRADEABLE_RESOURCES = [
+  'data_packets',
+  'bandwidth_tokens',
+  'encryption_keys',
+  'access_tokens',
+  'zero_days',
+  'quantum_cores',
+];
+
+// Death/Loss Consequences
+export const DEATH_CONFIG = {
+  // When traced (caught)
+  traceConsequences: {
+    creditLoss: 0.10,       // Lose 10% of credits
+    heatGain: 20,           // +20 heat
+    rigDamage: 25,          // 25% integrity damage to active rig
+    cargoLoss: 0.50,        // Lose 50% of carried resources
+    bountyReward: 0.25,     // 25% of lost credits go to hunter
+  },
+
+  // When killed by Counter-ICE
+  killConsequences: {
+    creditLoss: 0.25,       // Lose 25% of credits
+    rigDamage: 50,          // 50% integrity damage
+    cargoLoss: 1.0,         // Lose ALL carried resources
+    respawnDelay: 30000,    // 30 second respawn delay
+  },
+
+  // Rig integrity
+  rigIntegrity: {
+    max: 100,
+    repairCostPerPoint: 10, // 10 CR per integrity point
+    destroyedThreshold: 0,  // At 0, rig is destroyed
+    degradedThreshold: 25,  // Below 25%, performance degraded
+    degradedPenalty: 0.5,   // 50% slower when degraded
+  },
+
+  // Respawn behavior
+  respawn: {
+    defaultLocation: 'clearnet', // If no home set
+    protectionTime: 60000,       // 60s immunity after respawn
+  },
+};
+
+// Chat & Communications
+export const CHAT_CONFIG = {
+  channels: {
+    LOCAL: { id: 'local', name: 'Local', range: 'cluster' },      // Same cluster
+    GLOBAL: { id: 'global', name: 'Global', range: 'all' },       // All players
+    CREW: { id: 'crew', name: 'Crew', range: 'organization' },    // Org members only
+    DARKNET: { id: 'darknet', name: 'DarkNet', range: 'zone' },   // DarkNet only
+  },
+  messageRateLimit: 1000,    // 1 message per second
+  maxMessageLength: 500,
+  historyLength: 100,        // Messages to keep per channel
+};
+
+// Reputation System
+export const REPUTATION_CONFIG = {
+  actions: {
+    SUCCESSFUL_HACK: 5,        // +5 rep for successful hack
+    CLEAN_GETAWAY: 10,         // +10 for escaping without trace
+    TRACED: -15,               // -15 for getting caught
+    DEFEND_SUCCESS: 8,         // +8 for catching an intruder
+    TRADE_COMPLETE: 2,         // +2 per successful trade
+    CONTRACT_COMPLETE: 20,     // +20 per contract completed
+    CONTRACT_FAIL: -25,        // -25 for failing contract
+  },
+  titles: [
+    { minRep: -100, title: 'Blacklisted', color: '#ff0000' },
+    { minRep: 0, title: 'Unknown', color: '#888888' },
+    { minRep: 50, title: 'Script Kiddie', color: '#00ff00' },
+    { minRep: 150, title: 'Hacker', color: '#00ffff' },
+    { minRep: 300, title: 'Elite Hacker', color: '#ffff00' },
+    { minRep: 500, title: 'Netrunner', color: '#ff00ff' },
+    { minRep: 1000, title: 'Ghost', color: '#ffffff' },
+    { minRep: 2500, title: 'Legend', color: '#ffd700' },
+  ],
+};
+
+// Specialization Paths
+export const SPECIALIZATION_CONFIG = {
+  paths: {
+    INFILTRATOR: {
+      id: 'infiltrator',
+      name: 'Infiltrator',
+      description: 'Master of stealth and intrusion. Faster hacks, harder to trace.',
+      icon: '🔓',
+      skills: [
+        { id: 'silent_breach', name: 'Silent Breach', level: 1, cost: 100, effect: 'ICE breach 15% faster' },
+        { id: 'ghost_protocol', name: 'Ghost Protocol', level: 2, cost: 250, effect: 'Trace rate -20%' },
+        { id: 'shadow_step', name: 'Shadow Step', level: 3, cost: 500, effect: 'Move between nodes undetected' },
+        { id: 'zero_footprint', name: 'Zero Footprint', level: 4, cost: 1000, effect: 'Log cleaning instant' },
+        { id: 'phantom', name: 'Phantom', level: 5, cost: 2500, effect: 'Appear offline to defenders' },
+      ],
+    },
+    SENTINEL: {
+      id: 'sentinel',
+      name: 'Sentinel',
+      description: 'Network defender. Stronger ICE, faster traces.',
+      icon: '🛡️',
+      skills: [
+        { id: 'fortify', name: 'Fortify', level: 1, cost: 100, effect: 'ICE strength +15%' },
+        { id: 'rapid_trace', name: 'Rapid Trace', level: 2, cost: 250, effect: 'Backtrace 25% faster' },
+        { id: 'counter_surge', name: 'Counter Surge', level: 3, cost: 500, effect: 'Counter-ICE damage +20%' },
+        { id: 'iron_wall', name: 'Iron Wall', level: 4, cost: 1000, effect: 'Lockdown duration +50%' },
+        { id: 'omniscient', name: 'Omniscient', level: 5, cost: 2500, effect: 'Instant intrusion alerts' },
+      ],
+    },
+    BROKER: {
+      id: 'broker',
+      name: 'Broker',
+      description: 'Information trader. Better deals, larger inventory.',
+      icon: '💰',
+      skills: [
+        { id: 'haggle', name: 'Haggle', level: 1, cost: 100, effect: 'Market fees -25%' },
+        { id: 'deep_pockets', name: 'Deep Pockets', level: 2, cost: 250, effect: 'Max orders +10' },
+        { id: 'black_market', name: 'Black Market Access', level: 3, cost: 500, effect: 'Access rare resources' },
+        { id: 'information_broker', name: 'Information Broker', level: 4, cost: 1000, effect: 'Trade rep +50%' },
+        { id: 'kingpin', name: 'Kingpin', level: 5, cost: 2500, effect: 'Create exclusive contracts' },
+      ],
+    },
+  },
+  maxSkillLevel: 5,
+  respecCost: 5000,  // CR to reset skills
+};
+
 // Sectors (Regions of the Grid)
 export const SECTORS = {
   CORPORATE_CORE: {
