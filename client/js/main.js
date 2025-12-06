@@ -33,8 +33,10 @@ class App {
     // Connect to server
     await this.game.connect();
 
-    // Display welcome message
-    this.showWelcome();
+    // Show login screen (game starts hidden until authenticated)
+    this.loginScreen = new window.LoginScreen(this.game);
+
+    // Display welcome message (will be shown after login)
 
     // Start game loop
     this.startGameLoop();

@@ -1,0 +1,417 @@
+/* Login Screen - Hacker Desktop Aesthetic */
+
+/* Container wraps entire login experience */
+#login-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #0a0a0f 0%, #0d1117 50%, #0a0a0f 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    overflow: hidden;
+}
+
+/* CRT Scanline Effect */
+#login-screen::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(0deg,
+            rgba(0, 255, 65, 0.03) 0px,
+            rgba(0, 255, 65, 0.03) 1px,
+            transparent 1px,
+            transparent 2px);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Matrix Rain Background */
+#matrix-rain {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.15;
+    z-index: 0;
+}
+
+/* Desktop Window Container */
+.login-window {
+    position: relative;
+    width: 480px;
+    background: rgba(13, 17, 23, 0.95);
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    box-shadow:
+        0 0 40px rgba(0, 255, 65, 0.1),
+        0 0 80px rgba(0, 255, 65, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    z-index: 10;
+    overflow: hidden;
+    animation: windowBoot 0.6s ease-out;
+}
+
+@keyframes windowBoot {
+    0% {
+        transform: scale(0.9) translateY(20px);
+        opacity: 0;
+    }
+
+    100% {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Window Title Bar */
+.window-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: linear-gradient(180deg, #21262d 0%, #161b22 100%);
+    border-bottom: 1px solid #30363d;
+}
+
+.window-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.window-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #30363d;
+}
+
+.window-dot.close {
+    background: #f85149;
+}
+
+.window-dot.minimize {
+    background: #d29922;
+}
+
+.window-dot.maximize {
+    background: #3fb950;
+}
+
+.window-title {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #7d8590;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* Window Content */
+.window-content {
+    padding: 32px 40px;
+}
+
+/* Logo/Header */
+.login-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.login-logo {
+    font-family: 'Courier New', monospace;
+    font-size: 32px;
+    font-weight: bold;
+    color: #00ff41;
+    text-shadow:
+        0 0 10px rgba(0, 255, 65, 0.5),
+        0 0 20px rgba(0, 255, 65, 0.3);
+    margin-bottom: 8px;
+    letter-spacing: 4px;
+}
+
+.login-subtitle {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #7d8590;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+}
+
+/* Form Container with Transition */
+.form-container {
+    position: relative;
+    min-height: 200px;
+}
+
+.auth-form {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.auth-form.hidden {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    opacity: 0;
+    transform: translateX(-20px);
+    pointer-events: none;
+}
+
+.auth-form.active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: all;
+}
+
+/* Input Group */
+.input-group {
+    margin-bottom: 20px;
+}
+
+.input-label {
+    display: block;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #7d8590;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.input-field {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(22, 27, 34, 0.8);
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    color: #00ff41;
+    outline: none;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+
+.input-field::placeholder {
+    color: #484f58;
+}
+
+.input-field:focus {
+    border-color: #00ff41;
+    box-shadow:
+        0 0 0 3px rgba(0, 255, 65, 0.1),
+        0 0 20px rgba(0, 255, 65, 0.1);
+}
+
+/* Submit Button */
+.submit-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(180deg, #238636 0%, #1a7f32 100%);
+    border: 1px solid #3fb950;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.submit-btn:hover {
+    background: linear-gradient(180deg, #2ea043 0%, #238636 100%);
+    box-shadow: 0 0 20px rgba(63, 185, 80, 0.3);
+    transform: translateY(-1px);
+}
+
+.submit-btn:active {
+    transform: translateY(0);
+}
+
+.submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Loading State */
+.submit-btn.loading::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid transparent;
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+@keyframes spin {
+    to {
+        transform: translateY(-50%) rotate(360deg);
+    }
+}
+
+/* Toggle Link */
+.auth-toggle {
+    text-align: center;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #21262d;
+}
+
+.toggle-text {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #7d8590;
+}
+
+.toggle-link {
+    color: #58a6ff;
+    cursor: pointer;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.toggle-link:hover {
+    color: #79c0ff;
+    text-decoration: underline;
+}
+
+/* Error Message */
+.error-message {
+    background: rgba(248, 81, 73, 0.1);
+    border: 1px solid #f85149;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #f85149;
+    display: none;
+}
+
+.error-message.visible {
+    display: block;
+    animation: shake 0.4s ease;
+}
+
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-5px);
+    }
+
+    75% {
+        transform: translateX(5px);
+    }
+}
+
+/* Success Message */
+.success-message {
+    background: rgba(63, 185, 80, 0.1);
+    border: 1px solid #3fb950;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 16px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #3fb950;
+    display: none;
+}
+
+.success-message.visible {
+    display: block;
+}
+
+/* System Boot Text */
+.boot-text {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    color: #484f58;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* Glitch Effect on Logo */
+.login-logo:hover {
+    animation: glitch 0.3s ease;
+}
+
+@keyframes glitch {
+    0% {
+        text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+    }
+
+    20% {
+        text-shadow: -2px 0 #ff0040, 2px 0 #00ff41;
+    }
+
+    40% {
+        text-shadow: 2px 0 #ff0040, -2px 0 #00ff41;
+    }
+
+    60% {
+        text-shadow: -1px 0 #ff0040, 1px 0 #00ff41;
+    }
+
+    80% {
+        text-shadow: 1px 0 #ff0040, -1px 0 #00ff41;
+    }
+
+    100% {
+        text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+    }
+}
+
+/* Hide App when Login Visible */
+body.show-login #app {
+    display: none;
+}
+
+body.show-login #login-screen {
+    display: flex;
+}
+
+#login-screen.hidden {
+    display: none !important;
+}
+
+/* Terminal-style typing cursor */
+.input-field:focus {
+    caret-color: #00ff41;
+}
+
+/* Responsive */
+@media (max-width: 520px) {
+    .login-window {
+        width: 95%;
+        margin: 20px;
+    }
+
+    .window-content {
+        padding: 24px 20px;
+    }
+}

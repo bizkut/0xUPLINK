@@ -143,6 +143,16 @@ wss.on('connection', (ws) => {
       zero_days: 0,
       quantum_cores: 0,
     },
+    // Default Rig
+    rig: {
+      class: { id: 'burner' }, // Minimal ref, hydrated later or simple storage
+      equippedModules: {
+        core: [],
+        memory: [],
+        expansion: []
+      }
+    },
+    files: [], // For local storage tracking
     // Death/Loss system
     rigIntegrity: DEATH_CONFIG.rigIntegrity.max,
     homeSafeHouse: null,
