@@ -212,8 +212,92 @@ export class NodeMap {
       });
     });
 
+    // Draw device shapes on canvas
+    this.drawDevices();
+
     // Draw data flow animation on breached paths
     this.drawDataFlow();
+  }
+
+  drawDevices() {
+    if (!this.network) return;
+
+    this.network.nodes.forEach(node => {
+      const pos = this.nodePositions[node.id];
+      if (!pos) return;
+
+      const radius = 18;
+
+      // Determine colors based on state
+      let fillColor = 'rgba(20, 25, 35, 0.9)';
+      let strokeColor = 'rgba(58, 69, 85, 1)';
+
+      if (node.id === this.currentNode) {
+        strokeColor = 'rgba(255, 153, 0, 1)'; // Amber
+        fillColor = 'rgba(255, 153, 0, 0.15)';
+      } else if (node.breached) {
+        strokeColor = 'rgba(68, 170, 102, 1)'; // Green
+        fillColor = 'rgba(68, 170, 102, 0.15)';
+      } else if (node.ice) {
+        strokeColor = 'rgba(204, 68, 68, 1)'; // Red for locked
+        fillColor = 'rgba(204, 68, 68, 0.1)';
+      }
+
+      // Draw based on node shape
+      this.ctx.fillStyle = fillColor;
+      this.ctx.strokeStyle = strokeColor;
+      this.ctx.lineWidth = 2;
+
+      switch (node.shape) {
+        case 'square':
+          this.ctx.beginPath();
+          this.ctx.rect(pos.x - radius, pos.y - radius, radius * 2, radius * 2);
+          this.ctx.fill();
+          this.ctx.stroke();
+          break;
+        case 'diamond':
+          this.ctx.beginPath();
+          this.ctx.moveTo(pos.x, pos.y - radius);
+          this.ctx.lineTo(pos.x + radius, pos.y);
+          this.ctx.lineTo(pos.x, pos.y + radius);
+          this.ctx.lineTo(pos.x - radius, pos.y);
+          this.ctx.closePath();
+          this.ctx.fill();
+          this.ctx.stroke();
+          break;
+        case 'hexagon':
+          this.drawHexagon(pos.x, pos.y, radius);
+          this.ctx.fill();
+          this.ctx.stroke();
+          break;
+        case 'triangle':
+          this.ctx.beginPath();
+          this.ctx.moveTo(pos.x, pos.y - radius);
+          this.ctx.lineTo(pos.x + radius, pos.y + radius * 0.8);
+          this.ctx.lineTo(pos.x - radius, pos.y + radius * 0.8);
+          this.ctx.closePath();
+          this.ctx.fill();
+          this.ctx.stroke();
+          break;
+        default: // circle
+          this.ctx.beginPath();
+          this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+          this.ctx.fill();
+          this.ctx.stroke();
+      }
+    });
+  }
+
+  drawHexagon(x, y, radius) {
+    this.ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i - Math.PI / 2;
+      const px = x + radius * Math.cos(angle);
+      const py = y + radius * Math.sin(angle);
+      if (i === 0) this.ctx.moveTo(px, py);
+      else this.ctx.lineTo(px, py);
+    }
+    this.ctx.closePath();
   }
 
   drawDataFlow() {

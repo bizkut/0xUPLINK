@@ -847,14 +847,14 @@ class App {
     document.getElementById('reputation').textContent = state.player.reputation;
 
     const heatEl = document.getElementById('heat');
-    heatEl.textContent = `${state.player.heat}%`;
+    heatEl.textContent = `${state.player.heat.toFixed(2)}%`;
     heatEl.className = `value ${state.player.heat > 70 ? 'heat-high' : state.player.heat > 40 ? 'heat-med' : 'heat-low'}`;
 
     // Update trace bar if connected
     if (state.connection.active) {
       const trace = state.connection.trace;
       document.getElementById('trace-fill').style.width = `${trace}%`;
-      document.getElementById('trace-percent').textContent = `${trace.toFixed(0)}%`;
+      document.getElementById('trace-percent').textContent = `${trace.toFixed(2)}%`;
 
       // Check for trace completion
       if (trace >= 100) {
