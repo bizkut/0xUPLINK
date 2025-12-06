@@ -1,7 +1,7 @@
 # 0xUPLINK // Netrunner MMO
 
-> **Status**: Alpha v0.7  
-> **Latest**: Interactive Market UI, Hacker Login Screen, Supabase Persistence, NPC Vendors
+> **Status**: Alpha v0.8  
+> **Latest**: Dynamic NPC Trading, Order Modification (Eve-Style bid/ask), Order Cooldowns
 
 A cyberpunk hacking MMO inspired by *Uplink*, *Mr. Robot*, and *EVE Online*. Hack servers, steal data, harvest resources, dock at Safe Houses, customize your rig, trade on the market, and claim sovereignty over the DarkNet in a persistent, player-driven world.
 
@@ -167,10 +167,20 @@ Temporary high-value networks that appear randomly (like EVE wormholes):
 **Market UI Features:**
 - **Buy Orders Tab**: Browse NPC and player sell orders
 - **Sell Orders Tab**: Create your own sell orders
-- **My Orders Tab**: View and cancel your active orders
+- **My Orders Tab**: View, modify, and cancel your active orders
 - Category filtering (Computers, Modules, Core/Memory/Expansion)
 - Search, sorting, tier badges
 - Anonymous sellers (like EVE Online)
+
+**Order Modification (Eve-Style):**
+| Order Type | Rule |
+|------------|------|
+| **Sell** | Quantity can only DECREASE |
+| **Buy** | Quantity can only INCREASE |
+
+- **2-minute cooldown** between modifications
+- **10 CR fee** per modification
+- **24hr NPC trading simulation** (prices fluctuate, orders appear/cancel)
 
 ### Defense
 | Command | Description |
