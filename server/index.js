@@ -39,6 +39,7 @@ import {
   loadPlayerState
 } from './db.js';
 import { getRigById, getModuleById } from '../shared/computerModels.js';
+import { seedNpcMarketOrders, refreshNpcOrders } from './npcMarket.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -910,9 +911,19 @@ initializeUniverse();
 generateNPCServers(); // Legacy NPC servers for backwards compatibility
 spawnNPCSafeHouses(); // Spawn Safe Houses in the universe
 spawnInitialGhostNetworks(); // Spawn some ghost networks on startup
+seedNpcMarket(); // Seed NPC market with computer and module orders
 startGhostSpawnLoop(); // Start periodic ghost spawning
 startIntrusionProcessingLoop(); // Process intrusions and alerts
 startMarketCleanupLoop(); // Clean expired market orders
+
+// Seed NPC Market Orders
+function seedNpcMarket() {
+  const orders = seedNpcMarketOrders();
+  for (const order of orders) {
+    gameState.marketOrders.set(order.id, order);
+  }
+  console.log(`  NPC Market: ${orders.length} orders seeded`);
+}
 
 // Chat & Communications Handlers
 function handleChatSend(player, { channel, message }) {
@@ -1329,14 +1340,19 @@ function handleRigStatus(player) {
 }
 
 // Market Handlers
-function handleMarketList(player, { resourceType }) {
+function handleMarketList(player, { resourceType, itemType }) {
   let orders = Array.from(gameState.marketOrders.values());
 
   // Filter expired orders
   const now = Date.now();
   orders = orders.filter(o => o.expiresAt > now);
 
-  // Filter by resource type if specified
+  // Filter by item type if specified (computer, module, resource)
+  if (itemType) {
+    orders = orders.filter(o => o.itemType === itemType);
+  }
+
+  // Filter by resource type if specified (legacy support)
   if (resourceType && TRADEABLE_RESOURCES.includes(resourceType)) {
     orders = orders.filter(o => o.resourceType === resourceType);
   }
@@ -1349,13 +1365,26 @@ function handleMarketList(player, { resourceType }) {
     type: 'MARKET_LIST_RESULT',
     payload: {
       success: true,
+      // Map orders but HIDE seller names (anonymous market like Eve Online)
       orders: marketOrders.map(o => ({
         id: o.id,
-        seller: o.sellerName,
+        // Anonymous: never reveal seller identity
+        seller: 'Anonymous',
+        isNpc: o.isNpc || false,
+        // Item info
+        itemType: o.itemType || 'resource',
+        itemId: o.itemId,
+        itemName: o.itemName || o.resourceType,
+        itemTier: o.itemTier,
+        itemCategory: o.itemCategory,
+        // Resource legacy fields
         resource: o.resourceType,
-        amount: o.amount,
-        pricePerUnit: o.pricePerUnit,
-        total: o.totalPrice,
+        amount: o.amount || o.quantity,
+        quantity: o.quantity || o.amount,
+        // Pricing
+        price: o.price || o.pricePerUnit,
+        pricePerUnit: o.pricePerUnit || o.price,
+        total: o.totalPrice || o.price,
         expiresIn: Math.floor((o.expiresAt - now) / 60000), // minutes
       })),
       myOrders: myOrders.map(o => ({
