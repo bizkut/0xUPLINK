@@ -1,9 +1,9 @@
 # 0xUPLINK // Netrunner MMO
 
-> **Status**: Alpha v0.6  
-> **Latest**: Computer Models (EVE-style rigs), Local Storage System, Public Chat
+> **Status**: Alpha v0.7  
+> **Latest**: Interactive Market UI, Hacker Login Screen, Supabase Persistence, NPC Vendors
 
-A cyberpunk hacking MMO inspired by *Uplink*, *Mr. Robot*, and *EVE Online*. Hack servers, steal data, harvest resources, dock at Safe Houses, customize your rig, and claim sovereignty over the DarkNet in a persistent, player-driven world.
+A cyberpunk hacking MMO inspired by *Uplink*, *Mr. Robot*, and *EVE Online*. Hack servers, steal data, harvest resources, dock at Safe Houses, customize your rig, trade on the market, and claim sovereignty over the DarkNet in a persistent, player-driven world.
 
 ## 🚀 Quick Start
 
@@ -160,9 +160,17 @@ Temporary high-value networks that appear randomly (like EVE wormholes):
 ### Market Economy
 | Command | Description |
 |---------|-------------|
-| `market` | View sell orders |
+| `market` | Open interactive market UI |
 | `sell <resource> <amt> <price>` | List for sale |
 | `buy <order_id>` | Purchase order |
+
+**Market UI Features:**
+- **Buy Orders Tab**: Browse NPC and player sell orders
+- **Sell Orders Tab**: Create your own sell orders
+- **My Orders Tab**: View and cancel your active orders
+- Category filtering (Computers, Modules, Core/Memory/Expansion)
+- Search, sorting, tier badges
+- Anonymous sellers (like EVE Online)
 
 ### Defense
 | Command | Description |
@@ -236,6 +244,7 @@ EVE Online-inspired dark space aesthetic with semi-transparent panels, blue hove
 
 - **Frontend**: Vanilla JS, HTML5, CSS3 (Terminal UI + Canvas)
 - **Backend**: Node.js, Express, WebSocket
+- **Database**: Supabase (PostgreSQL) for persistence
 - **Containerization**: Docker, Docker Compose
 - **Architecture**: Event-driven, Server-authoritative
 

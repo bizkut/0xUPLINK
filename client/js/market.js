@@ -8,9 +8,10 @@ export class MarketUI {
     this.game = game;
     this.isOpen = false;
     this.currentCategory = 'all';
-    this.currentTab = 'buy'; // 'buy' or 'sell'
+    this.currentTab = 'buy'; // 'buy', 'sell', or 'my-orders'
     this.selectedOrder = null;
-    this.orders = [];
+    this.orders = [];       // All market orders
+    this.myOrders = [];     // Current player's orders
     this.searchQuery = '';
     this.sortColumn = 'itemName';
     this.sortDirection = 'asc';
@@ -137,7 +138,8 @@ export class MarketUI {
         this.modal.querySelectorAll('.market-tab').forEach(t => t.classList.remove('active'));
         el.classList.add('active');
         this.currentTab = el.dataset.tab;
-        this.renderTable();
+        this.selectedOrder = null;
+        this.renderView();
       });
     });
 
@@ -165,7 +167,7 @@ export class MarketUI {
     // Listen for market data from server
     window.addEventListener('market-list-result', (e) => {
       if (this.isOpen && e.detail) {
-        this.updateOrders(e.detail.orders || []);
+        this.updateOrders(e.detail.orders || [], e.detail.myOrders || []);
       }
     });
 
@@ -175,6 +177,29 @@ export class MarketUI {
         this.handleBuyResult(e.detail);
       }
     });
+
+    // Listen for sell result
+    window.addEventListener('market-sell-result', (e) => {
+      if (this.isOpen && e.detail) {
+        const resultEl = document.getElementById('sell-result');
+        if (e.detail.success) {
+          if (resultEl) resultEl.innerHTML = '<span style="color: #3fb950;">✓ Order created!</span>';
+          setTimeout(() => this.requestMarketData(), 500);
+        } else {
+          if (resultEl) resultEl.innerHTML = `<span style="color: #f85149;">${e.detail.error || 'Failed'}</span>`;
+        }
+      }
+    });
+
+    // Listen for cancel result
+    window.addEventListener('market-cancel-result', (e) => {
+      if (this.isOpen && e.detail) {
+        this.requestMarketData();
+      }
+    });
+
+    // Store reference for onclick handlers
+    window.marketUI = this;
   }
 
   updateSortIndicators() {
@@ -209,10 +234,22 @@ export class MarketUI {
     }
   }
 
-  updateOrders(orders) {
+  updateOrders(orders, myOrders = []) {
     this.orders = orders || [];
+    this.myOrders = myOrders || [];
     this.updateCategoryCounts();
-    this.renderTable();
+    this.renderView();
+  }
+
+  renderView() {
+    // Render based on current tab
+    if (this.currentTab === 'my-orders') {
+      this.renderMyOrders();
+    } else if (this.currentTab === 'sell') {
+      this.renderSellForm();
+    } else {
+      this.renderTable();
+    }
   }
 
   updateCategoryCounts() {
@@ -434,6 +471,200 @@ export class MarketUI {
   formatCredits(amount) {
     if (!amount) return '0 CR';
     return amount.toLocaleString() + ' CR';
+  }
+
+  // Render Sell Form for creating sell orders
+  renderSellForm() {
+    // Get player resources for sell dropdown
+    const resources = this.game.state?.player?.resources || {};
+
+    this.tableBody.innerHTML = `
+      <tr>
+        <td colspan="4" style="padding: 20px;">
+          <div style="max-width: 400px; margin: 0 auto;">
+            <div style="font-size: 14px; color: #00ff41; margin-bottom: 16px; text-transform: uppercase;">
+              Create Sell Order
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+              <label style="display: block; color: #7d8590; font-size: 10px; margin-bottom: 4px;">RESOURCE</label>
+              <select id="sell-resource" style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; color: #c9d1d9; font-family: 'Courier New', monospace;">
+                <option value="">Select resource...</option>
+                <option value="data_packets">Data Packets (${resources.data_packets || 0})</option>
+                <option value="crypto_keys">Crypto Keys (${resources.crypto_keys || 0})</option>
+                <option value="access_tokens">Access Tokens (${resources.access_tokens || 0})</option>
+                <option value="exploit_code">Exploit Code (${resources.exploit_code || 0})</option>
+              </select>
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+              <label style="display: block; color: #7d8590; font-size: 10px; margin-bottom: 4px;">AMOUNT</label>
+              <input type="number" id="sell-amount" min="1" value="1" style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; color: #00ff41; font-family: 'Courier New', monospace;">
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; color: #7d8590; font-size: 10px; margin-bottom: 4px;">PRICE PER UNIT (CR)</label>
+              <input type="number" id="sell-price" min="1" value="10" style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; color: #3fb950; font-family: 'Courier New', monospace;">
+            </div>
+            
+            <button id="create-sell-order" class="buy-btn" style="width: 100%;">
+              Create Sell Order
+            </button>
+            
+            <div id="sell-result" style="margin-top: 12px; text-align: center;"></div>
+          </div>
+        </td>
+      </tr>
+    `;
+
+    // Clear details panel
+    this.detailsPanel.innerHTML = `
+      <div class="market-empty">
+        <div class="market-empty-icon">💰</div>
+        <div class="market-empty-text">Sell Resources</div>
+      </div>
+    `;
+
+    // Attach sell button handler
+    document.getElementById('create-sell-order')?.addEventListener('click', () => {
+      this.createSellOrder();
+    });
+  }
+
+  // Create a sell order
+  createSellOrder() {
+    const resourceType = document.getElementById('sell-resource')?.value;
+    const amount = parseInt(document.getElementById('sell-amount')?.value) || 0;
+    const pricePerUnit = parseInt(document.getElementById('sell-price')?.value) || 0;
+    const resultEl = document.getElementById('sell-result');
+
+    if (!resourceType) {
+      if (resultEl) resultEl.innerHTML = '<span style="color: #f85149;">Select a resource</span>';
+      return;
+    }
+    if (amount <= 0 || pricePerUnit <= 0) {
+      if (resultEl) resultEl.innerHTML = '<span style="color: #f85149;">Invalid amount or price</span>';
+      return;
+    }
+
+    // Send sell order request
+    if (this.game.ws && this.game.ws.readyState === WebSocket.OPEN) {
+      this.game.ws.send(JSON.stringify({
+        type: 'MARKET_SELL',
+        payload: { resourceType, amount, pricePerUnit }
+      }));
+
+      if (resultEl) resultEl.innerHTML = '<span style="color: #7d8590;">Creating order...</span>';
+    }
+  }
+
+  // Render My Orders tab
+  renderMyOrders() {
+    if (this.myOrders.length === 0) {
+      this.tableBody.innerHTML = `
+        <tr>
+          <td colspan="4" style="text-align: center; color: #484f58; padding: 40px;">
+            You have no active orders
+          </td>
+        </tr>
+      `;
+      this.detailsPanel.innerHTML = `
+        <div class="market-empty">
+          <div class="market-empty-icon">📋</div>
+          <div class="market-empty-text">No active orders</div>
+        </div>
+      `;
+      return;
+    }
+
+    this.tableBody.innerHTML = this.myOrders.map(order => `
+      <tr data-order-id="${order.id}">
+        <td>
+          ${order.itemName || order.resource}
+          <span class="tier-badge tier-${order.itemTier || 1}">T${order.itemTier || 1}</span>
+        </td>
+        <td>${order.quantity || order.amount || 1}</td>
+        <td class="price-cell">${this.formatCredits(order.price || order.pricePerUnit)}</td>
+        <td>
+          <button class="cancel-order-btn" data-order-id="${order.id}" 
+                  style="padding: 4px 8px; background: #f85149; border: none; color: #fff; cursor: pointer; font-size: 10px;">
+            CANCEL
+          </button>
+        </td>
+      </tr>
+    `).join('');
+
+    // Attach cancel handlers
+    this.tableBody.querySelectorAll('.cancel-order-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const orderId = btn.dataset.orderId;
+        this.cancelOrder(orderId);
+      });
+    });
+
+    // Row click for details
+    this.tableBody.querySelectorAll('tr[data-order-id]').forEach(row => {
+      row.addEventListener('click', () => {
+        const orderId = row.dataset.orderId;
+        const order = this.myOrders.find(o => o.id === orderId);
+        if (order) this.renderMyOrderDetails(order);
+      });
+    });
+
+    // Clear details
+    this.detailsPanel.innerHTML = `
+      <div class="market-empty">
+        <div class="market-empty-icon">📋</div>
+        <div class="market-empty-text">Select an order</div>
+      </div>
+    `;
+  }
+
+  renderMyOrderDetails(order) {
+    this.detailsPanel.innerHTML = `
+      <div class="details-header">
+        <div class="details-title">${order.itemName || order.resource}</div>
+        <div class="details-category">Your Sell Order</div>
+      </div>
+      
+      <div class="details-body">
+        <div class="details-section">
+          <div class="details-section-title">Order Info</div>
+          <div class="details-row">
+            <span class="label">Amount</span>
+            <span class="value">${order.quantity || order.amount}</span>
+          </div>
+          <div class="details-row">
+            <span class="label">Price Each</span>
+            <span class="value price">${this.formatCredits(order.price || order.pricePerUnit)}</span>
+          </div>
+          <div class="details-row">
+            <span class="label">Total Value</span>
+            <span class="value price">${this.formatCredits((order.price || order.pricePerUnit) * (order.quantity || order.amount))}</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="buy-section">
+        <button class="buy-btn" style="background: linear-gradient(180deg, #f85149 0%, #da3633 100%); border-color: #f85149;" 
+                onclick="window.marketUI?.cancelOrder('${order.id}')">
+          Cancel Order
+        </button>
+      </div>
+    `;
+  }
+
+  cancelOrder(orderId) {
+    if (this.game.ws && this.game.ws.readyState === WebSocket.OPEN) {
+      this.game.ws.send(JSON.stringify({
+        type: 'MARKET_CANCEL',
+        payload: { orderId }
+      }));
+
+      // Refresh after short delay
+      setTimeout(() => this.requestMarketData(), 500);
+    }
   }
 }
 
