@@ -219,6 +219,17 @@
   - 3 paths: Infiltrator (stealth), Sentinel (defense), Broker (trading)
   - 15 unique skills with prerequisites and escalating costs
   - Commands: skills, spec choose, spec learn
+- [x] **Status Sidebar UI** (Completed 2025-12-06)
+  - Real-time rig status, resources, reputation display
+  - Quick action buttons (Status, Explore, Market, Skills)
+  - Contextual actions (Safe House, Hacking, Defense)
+- [x] **EVE Online Theme** (Completed 2025-12-06)
+  - Dark space gradient background
+  - Semi-transparent panels with thin borders
+  - Balanced color scheme (white text, amber highlights, blue hover)
+- [x] **Interactive Network Map** (Completed 2025-12-06)
+  - Clickable nodes execute move commands
+  - EVE-styled connection colors
 - [ ] Player authentication system
 - [ ] Session management
 - [ ] Rate limiting

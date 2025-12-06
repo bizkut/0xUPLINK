@@ -1,7 +1,7 @@
 # 0xUPLINK // Netrunner MMO
 
-> **Status**: Alpha v0.4  
-> **Latest**: Safe Houses, Ghost Networks, Graded Heat System
+> **Status**: Alpha v0.5  
+> **Latest**: EVE Theme, Status Sidebar, Specialization Paths, Interactive Network Map
 
 A cyberpunk hacking MMO inspired by *Uplink*, *Mr. Robot*, and *EVE Online*. Hack servers, steal data, harvest resources, dock at Safe Houses, and claim sovereignty over the DarkNet in a persistent, player-driven world.
 
@@ -181,6 +181,32 @@ Temporary high-value networks that appear randomly (like EVE wormholes):
 | `spec learn <skill_id>` | Learn a skill |
 
 **Paths**: Infiltrator 🔓, Sentinel 🛡️, Broker 💰
+
+---
+
+## 🎨 User Interface
+
+### Status Sidebar
+The right sidebar displays real-time information:
+- **Rig Status**: Integrity bar (repairs when damaged)
+- **Resources**: All 6 resource types at a glance
+- **Reputation**: Title and score
+- **Quick Actions**: Context-sensitive buttons
+
+### Contextual Actions
+Buttons appear automatically based on your situation:
+- **@ Safe House**: Dock, Hangar, Set Home
+- **Connected (Hacking)**: Harvest, Clean Logs, Disconnect
+- **Under Attack**: Defend, Lockdown
+
+### Interactive Network Map
+Click nodes directly on the network map to move (same as `move <node>` command).
+
+### Theme
+EVE Online-inspired dark space aesthetic with:
+- Semi-transparent panels
+- Blue hover effects
+- Amber highlights for important items
 
 ---
 
