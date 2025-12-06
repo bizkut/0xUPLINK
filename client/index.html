@@ -62,6 +62,18 @@
           </div>
           <span id="trace-percent">0%</span>
         </div>
+        <!-- Global Chat Panel -->
+        <div id="chat-panel">
+          <div class="panel-header">
+            <span class="panel-title">// GLOBAL CHAT</span>
+            <span id="chat-online-count" class="online-count">0 online</span>
+          </div>
+          <div id="chat-messages"></div>
+          <div id="chat-input-line">
+            <input type="text" id="chat-input" placeholder="Type message..." autocomplete="off" spellcheck="false">
+            <button id="chat-send-btn">SEND</button>
+          </div>
+        </div>
       </section>
 
       <!-- Right Panel: Terminal -->
@@ -78,19 +90,6 @@
           <span class="prompt" id="terminal-prompt">root@uplink:~$</span>
           <input type="text" id="terminal-input" autocomplete="off" spellcheck="false">
           <div id="autocomplete-dropdown"></div>
-        </div>
-      </section>
-
-      <!-- Public Chat Panel -->
-      <section id="chat-panel">
-        <div class="panel-header">
-          <span class="panel-title">// GLOBAL CHAT</span>
-          <span id="chat-online-count" class="online-count">0 online</span>
-        </div>
-        <div id="chat-messages"></div>
-        <div id="chat-input-line">
-          <input type="text" id="chat-input" placeholder="Type message..." autocomplete="off" spellcheck="false">
-          <button id="chat-send-btn">SEND</button>
         </div>
       </section>
 
