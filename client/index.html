@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
   <link rel="stylesheet" href="css/terminal.css">
   <link rel="stylesheet" href="css/game.css">
 </head>
+
 <body>
   <div id="app">
     <!-- Top Status Bar -->
@@ -73,7 +75,7 @@
         </div>
         <div id="terminal-output"></div>
         <div id="terminal-input-line">
-          <span class="prompt">root@uplink:~$</span>
+          <span class="prompt" id="terminal-prompt">root@uplink:~$</span>
           <input type="text" id="terminal-input" autocomplete="off" spellcheck="false">
           <div id="autocomplete-dropdown"></div>
         </div>
@@ -130,7 +132,7 @@
             <button class="sidebar-btn" data-cmd="market">🛒 Market</button>
             <button class="sidebar-btn" data-cmd="skills">📚 Skills</button>
           </div>
-          
+
           <!-- Safe House actions (shown when at safe house) -->
           <div class="context-group hidden" id="safehouse-actions">
             <div class="context-label">@ Safe House</div>
@@ -224,4 +226,5 @@
 
   <script type="module" src="js/main.js"></script>
 </body>
+
 </html>

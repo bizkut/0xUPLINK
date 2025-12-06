@@ -842,10 +842,26 @@ export class Game {
       id: 'firewall_1',
       type: 'firewall',
       ...NODE_TYPES.FIREWALL,
-      connections: ['gateway', 'database_1'],
+      connections: ['gateway', 'database_1', 'log_server'],
       ice: { ...ICE_TYPES.FIREWALL, strength: 100 + Math.floor(difficulty * 200) },
       breached: false,
       files: [],
+      resources: [],
+    });
+
+    // Add log server - where players clean logs
+    nodes.push({
+      id: 'log_server',
+      type: 'log_server',
+      ...NODE_TYPES.LOG_SERVER,
+      connections: ['firewall_1'],
+      ice: difficulty > 0.6 ? { ...ICE_TYPES.TRACKER } : null,
+      breached: false,
+      files: [
+        { name: 'access.log', size: 1024 * 50, value: 0, encrypted: false, isLog: true },
+        { name: 'auth.log', size: 1024 * 20, value: 0, encrypted: false, isLog: true },
+        { name: 'system.log', size: 1024 * 100, value: 0, encrypted: false, isLog: true },
+      ],
       resources: [],
     });
 

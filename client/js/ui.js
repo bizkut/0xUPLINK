@@ -35,13 +35,18 @@ export class UI {
   setConnected(connected, targetIp = null) {
     const indicator = document.getElementById('connection-indicator');
     const status = document.getElementById('connection-status');
+    const prompt = document.getElementById('terminal-prompt');
 
     if (connected) {
       indicator.classList.add('connected');
       status.textContent = targetIp || 'CONNECTED';
+      // Change prompt to show connected server
+      const hostname = targetIp ? targetIp.replace(/\./g, '-') : 'target';
+      prompt.textContent = `root@${hostname}:~$`;
     } else {
       indicator.classList.remove('connected');
       status.textContent = 'LOCAL';
+      prompt.textContent = 'root@uplink:~$';
       document.getElementById('trace-fill').style.width = '0%';
       document.getElementById('trace-percent').textContent = '0%';
     }
