@@ -5,15 +5,20 @@ dotenv.config();
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-    console.error('Missing Supabase URL or Key in .env');
-}
+// Supabase is OPTIONAL - game works without persistence
+export const supabase = (supabaseUrl && supabaseKey)
+    ? createClient(supabaseUrl, supabaseKey)
+    : null;
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+if (!supabase) {
+    console.warn('[DB] Supabase not configured - running without persistence');
+}
 
 // --- Auth ---
 
 export async function registerUser(username, password) {
+    if (!supabase) return { error: 'Database not configured' };
+
     // Use custom RPC to bypass Captcha/Rate limits and ensure atomic creation
     const { data, error } = await supabase.rpc('register_player', {
         username,
@@ -28,6 +33,8 @@ export async function registerUser(username, password) {
 }
 
 export async function loginUser(username, password) {
+    if (!supabase) return { error: 'Database not configured' };
+
     const email = `${username.toLowerCase()}@uplink.net`;
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -42,6 +49,8 @@ export async function loginUser(username, password) {
 // --- Persistence ---
 
 export async function savePlayerState(playerId, state) {
+    if (!supabase) return; // Skip if no DB
+
     // Use RPCs to bypass RLS (since we are server)
 
     // 1. Save Stats & Resources
@@ -83,6 +92,8 @@ export async function savePlayerState(playerId, state) {
 }
 
 export async function loadPlayerState(playerId) {
+    if (!supabase) return null; // Skip if no DB
+
     const { data, error } = await supabase.rpc('load_player_state', { p_id: playerId });
 
     if (error) {

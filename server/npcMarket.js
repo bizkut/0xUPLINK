@@ -6,11 +6,12 @@ import { COMPUTER_CLASSES, RIG_MODULES } from '../shared/computerModels.js';
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
 
-// Supabase client for market operations
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_KEY
-);
+// Supabase client for market operations (optional)
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabase = (supabaseUrl && supabaseKey)
+    ? createClient(supabaseUrl, supabaseKey)
+    : null;
 
 // Price variance configuration
 const PRICE_CONFIG = {
@@ -24,6 +25,12 @@ let cachedVendors = [];
 
 // Load vendors from database
 export async function loadVendorsFromDb() {
+    if (!supabase) {
+        console.warn('[NPC Market] No database - using fallback vendors');
+        cachedVendors = getFallbackVendors();
+        return cachedVendors;
+    }
+
     const { data, error } = await supabase
         .from('npc_vendors')
         .select('*')
@@ -74,8 +81,22 @@ function generateQuantity(tier) {
     }
 }
 
+// Fallback vendors when no database
+function getFallbackVendors() {
+    return [
+        { vendor_code: 'NPC_TechDealer', name: 'TechDealer', price_modifier: 1.0 },
+        { vendor_code: 'NPC_ShadowMarket', name: 'ShadowMarket', price_modifier: 0.95 },
+        { vendor_code: 'NPC_BlackMarket', name: 'BlackMarket', price_modifier: 1.1 },
+    ];
+}
+
+// In-memory orders when no database
+let inMemoryOrders = [];
+
 // Load existing market orders from database
 export async function loadMarketOrdersFromDb() {
+    if (!supabase) return inMemoryOrders;
+
     const now = new Date().toISOString();
 
     const { data, error } = await supabase
@@ -108,6 +129,11 @@ export async function loadMarketOrdersFromDb() {
 
 // Save a market order to database
 export async function saveMarketOrderToDb(order) {
+    if (!supabase) {
+        inMemoryOrders.push(order);
+        return true;
+    }
+
     const { error } = await supabase
         .from('market_orders')
         .insert({
@@ -135,6 +161,15 @@ export async function saveMarketOrderToDb(order) {
 
 // Update order quantity in database
 export async function updateOrderQuantityInDb(orderId, newQuantity) {
+    if (!supabase) {
+        const idx = inMemoryOrders.findIndex(o => o.id === orderId);
+        if (idx !== -1) {
+            if (newQuantity <= 0) inMemoryOrders.splice(idx, 1);
+            else inMemoryOrders[idx].quantity = newQuantity;
+        }
+        return;
+    }
+
     if (newQuantity <= 0) {
         // Delete order if quantity reaches 0
         const { error } = await supabase
@@ -156,6 +191,11 @@ export async function updateOrderQuantityInDb(orderId, newQuantity) {
 
 // Delete order from database
 export async function deleteOrderFromDb(orderId) {
+    if (!supabase) {
+        inMemoryOrders = inMemoryOrders.filter(o => o.id !== orderId);
+        return;
+    }
+
     const { error } = await supabase
         .from('market_orders')
         .delete()
