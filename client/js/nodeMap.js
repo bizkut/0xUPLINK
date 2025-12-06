@@ -13,10 +13,10 @@ export class NodeMap {
     this.canvas = document.getElementById('node-canvas');
     this.ctx = this.canvas.getContext('2d');
     this.overlay = document.getElementById('node-overlay');
-    
+
     this.resize();
     window.addEventListener('resize', () => this.resize());
-    
+
     this.startAnimation();
   }
 
@@ -24,7 +24,7 @@ export class NodeMap {
     const container = this.canvas.parentElement;
     this.canvas.width = container.clientWidth;
     this.canvas.height = container.clientHeight;
-    
+
     if (this.network) {
       this.calculatePositions();
       this.render();
@@ -44,7 +44,7 @@ export class NodeMap {
 
   updateNode(nodeId, updates) {
     if (!this.network) return;
-    
+
     const node = this.network.nodes.find(n => n.id === nodeId);
     if (node) {
       Object.assign(node, updates);
@@ -58,7 +58,7 @@ export class NodeMap {
     this.nodePositions = {};
     this.overlay.innerHTML = '';
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    
+
     document.getElementById('target-name').textContent = 'NO CONNECTION';
   }
 
@@ -114,8 +114,8 @@ export class NodeMap {
     if (!this.network) return;
 
     this.overlay.innerHTML = '';
-    
-    document.getElementById('target-name').textContent = 
+
+    document.getElementById('target-name').textContent =
       `${this.network.owner} @ ${this.network.ip}`;
 
     this.network.nodes.forEach(node => {
@@ -172,7 +172,7 @@ export class NodeMap {
   onNodeClick(nodeId) {
     // Dispatch custom event for game to handle
     window.dispatchEvent(new CustomEvent('node-click', { detail: { nodeId } }));
-    
+
     // Also try to move via terminal command
     if (window.app) {
       window.app.terminal.executeCommand(`move ${nodeId}`);
@@ -184,9 +184,8 @@ export class NodeMap {
 
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // Draw connections
-    this.ctx.strokeStyle = '#2a2a2a';
-    this.ctx.lineWidth = 2;
+    // Draw connections - EVE style colors
+    this.ctx.lineWidth = 1;
 
     this.network.nodes.forEach(node => {
       const pos = this.nodePositions[node.id];
@@ -196,14 +195,14 @@ export class NodeMap {
         const connPos = this.nodePositions[connId];
         if (!connPos) return;
 
-        // Determine line color based on node states
+        // Determine line color based on node states - EVE theme
         const connNode = this.network.nodes.find(n => n.id === connId);
         if (node.breached && connNode && connNode.breached) {
-          this.ctx.strokeStyle = 'rgba(0, 255, 157, 0.3)';
+          this.ctx.strokeStyle = 'rgba(68, 170, 102, 0.5)'; // Green for breached
         } else if (node.id === this.currentNode || connId === this.currentNode) {
-          this.ctx.strokeStyle = 'rgba(255, 176, 0, 0.5)';
+          this.ctx.strokeStyle = 'rgba(255, 153, 0, 0.6)'; // Amber for current
         } else {
-          this.ctx.strokeStyle = '#2a2a2a';
+          this.ctx.strokeStyle = 'rgba(58, 69, 85, 0.8)'; // Dark blue-gray
         }
 
         this.ctx.beginPath();
@@ -221,7 +220,7 @@ export class NodeMap {
     if (!this.network) return;
 
     const time = Date.now() / 1000;
-    
+
     this.network.nodes.forEach(node => {
       if (!node.breached) return;
       const pos = this.nodePositions[node.id];

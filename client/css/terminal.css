@@ -1,20 +1,29 @@
 :root {
-  --bg-primary: #0a0a0a;
-  --bg-secondary: #111111;
-  --bg-tertiary: #1a1a1a;
-  --border-color: #2a2a2a;
-  --text-primary: #00ff9d;
-  --text-secondary: #00cc7a;
-  --text-dim: #006644;
-  --text-white: #e0e0e0;
-  --accent-amber: #ffb000;
-  --accent-red: #ff3333;
-  --accent-blue: #00aaff;
-  --accent-purple: #aa55ff;
-  --glow-green: 0 0 10px rgba(0, 255, 157, 0.5);
-  --glow-amber: 0 0 10px rgba(255, 176, 0, 0.5);
-  --glow-red: 0 0 10px rgba(255, 51, 51, 0.5);
-  --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+  /* EVE Online Inspired Theme - Balanced */
+  --bg-primary: #0a0d14;
+  --bg-secondary: rgba(20, 25, 35, 0.85);
+  --bg-tertiary: rgba(30, 38, 50, 0.9);
+  --bg-panel: rgba(18, 22, 30, 0.75);
+  --border-color: #3a4555;
+  --border-highlight: #5a6578;
+  --text-primary: #e8e8e8;
+  /* White for primary text */
+  --text-secondary: #a0a8b8;
+  /* Light gray */
+  --text-dim: #667788;
+  /* Muted gray-blue */
+  --text-white: #ffffff;
+  --text-gray: #8090a0;
+  --accent-amber: #ff9900;
+  /* Orange for highlights only */
+  --accent-red: #cc4444;
+  --accent-blue: #6699cc;
+  --accent-green: #44aa66;
+  --accent-purple: #9966cc;
+  --glow-amber: 0 0 8px rgba(255, 153, 0, 0.4);
+  --glow-red: 0 0 8px rgba(204, 68, 68, 0.4);
+  --glow-blue: 0 0 8px rgba(102, 153, 204, 0.4);
+  --font-mono: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 
 * {
@@ -23,14 +32,18 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   height: 100%;
   overflow: hidden;
 }
 
 body {
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background:
+    radial-gradient(ellipse at 20% 80%, rgba(30, 50, 80, 0.3) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(50, 30, 70, 0.2) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, #0a0d14 0%, #050810 100%);
+  color: var(--text-white);
   font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1.4;
@@ -74,13 +87,31 @@ body {
   margin: 0 12px;
 }
 
-.heat-low { color: var(--text-primary) !important; }
-.heat-med { color: var(--accent-amber) !important; text-shadow: var(--glow-amber); }
-.heat-high { color: var(--accent-red) !important; text-shadow: var(--glow-red); animation: pulse 1s infinite; }
+.heat-low {
+  color: var(--text-primary) !important;
+}
+
+.heat-med {
+  color: var(--accent-amber) !important;
+  text-shadow: var(--glow-amber);
+}
+
+.heat-high {
+  color: var(--accent-red) !important;
+  text-shadow: var(--glow-red);
+  animation: pulse 1s infinite;
+}
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 #clock {
