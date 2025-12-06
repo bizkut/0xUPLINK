@@ -206,6 +206,15 @@ export class Game {
       case 'CONTRACT_CANCEL_RESULT':
         window.dispatchEvent(new CustomEvent('contract-cancel-result', { detail: payload }));
         break;
+      case 'BLACKMARKET_LIST_RESULT':
+        window.dispatchEvent(new CustomEvent('blackmarket-list-result', { detail: payload }));
+        break;
+      case 'BLACKMARKET_BUY_RESULT':
+        window.dispatchEvent(new CustomEvent('blackmarket-buy-result', { detail: payload }));
+        break;
+      case 'BLACKMARKET_SELL_RESULT':
+        window.dispatchEvent(new CustomEvent('blackmarket-sell-result', { detail: payload }));
+        break;
       case 'PLAYER_COUNT':
         window.dispatchEvent(new CustomEvent('player-count', { detail: payload }));
         break;

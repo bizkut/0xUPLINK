@@ -524,8 +524,32 @@ export const CONTRACT_CONFIG = {
   maxDuration: 604800000,     // 7 days maximum
 };
 
+// Black Market (DarkNet-only, dynamic pricing)
+export const BLACK_MARKET_CONFIG = {
+  priceUpdateInterval: 3600000,  // 1hr price fluctuation
+  volatility: 0.15,              // 15% max price swing per cycle
+  demandDecay: 0.05,             // 5% demand decrease per cycle
+  heatPenalty: 5,                // Heat gain per contraband transaction
+  darknetOnly: true,             // Requires DarkNet zone access
+  supplyLevels: {
+    abundant: { threshold: 20, multiplier: 0.8 },  // 80% of base price
+    normal: { threshold: 10, multiplier: 1.0 },    // Base price
+    scarce: { threshold: 5, multiplier: 1.25 },    // 125% of base price
+    rare: { threshold: 0, multiplier: 1.5 },       // 150% of base price
+  },
+};
 
-// Death/Loss Consequences
+export const CONTRABAND_ITEMS = [
+  { id: 'stolen_creds', name: 'Stolen Credentials', basePrice: 500, rarity: 'normal', desc: 'Bank login data' },
+  { id: 'hot_data', name: 'Hot Data', basePrice: 200, rarity: 'abundant', desc: 'Recently stolen files' },
+  { id: 'exploit_kit', name: 'Exploit Kit', basePrice: 2000, rarity: 'scarce', desc: 'Zero-day package' },
+  { id: 'corp_secrets', name: 'Corporate Secrets', basePrice: 5000, rarity: 'scarce', desc: 'Insider trading intel' },
+  { id: 'backdoor_access', name: 'Backdoor Access', basePrice: 10000, rarity: 'rare', desc: 'Pre-installed network access' },
+  { id: 'identity_packet', name: 'Identity Packet', basePrice: 3000, rarity: 'scarce', desc: 'Clean ID for heat wipe' },
+  { id: 'blackmail_data', name: 'Blackmail Data', basePrice: 8000, rarity: 'rare', desc: 'Leverage on targets' },
+];
+
+
 export const DEATH_CONFIG = {
   // When traced (caught)
   traceConsequences: {

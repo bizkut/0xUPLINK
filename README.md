@@ -1,7 +1,7 @@
 # 0xUPLINK // Netrunner MMO
 
-> **Status**: Alpha v0.9  
-> **Latest**: Contract Marketplace (player-created bounties/jobs), Dynamic NPC Trading
+> **Status**: Alpha v1.0  
+> **Latest**: Black Market (DarkNet contraband), Contract Marketplace, Dynamic NPC Trading
 
 A cyberpunk hacking MMO inspired by *Uplink*, *Mr. Robot*, and *EVE Online*. Hack servers, steal data, harvest resources, dock at Safe Houses, customize your rig, trade on the market, and claim sovereignty over the DarkNet in a persistent, player-driven world.
 

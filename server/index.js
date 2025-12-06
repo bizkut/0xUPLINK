@@ -15,7 +15,7 @@ import {
   isGhostExpired,
   getGhostTimeRemaining,
 } from '../shared/universe.js';
-import { SECURITY_ZONES, SECTORS, FACTIONS, GHOST_NETWORK_CONFIG, SAFE_HOUSE_TYPES, COUNTER_PROGRAMS, INTRUSION_CONFIG, MARKET_CONFIG, TRADEABLE_RESOURCES, DEATH_CONFIG, CHAT_CONFIG, REPUTATION_CONFIG, SPECIALIZATION_CONFIG, CONTRACT_TYPES, CONTRACT_CONFIG } from '../shared/constants.js';
+import { SECURITY_ZONES, SECTORS, FACTIONS, GHOST_NETWORK_CONFIG, SAFE_HOUSE_TYPES, COUNTER_PROGRAMS, INTRUSION_CONFIG, MARKET_CONFIG, TRADEABLE_RESOURCES, DEATH_CONFIG, CHAT_CONFIG, REPUTATION_CONFIG, SPECIALIZATION_CONFIG, CONTRACT_TYPES, CONTRACT_CONFIG, BLACK_MARKET_CONFIG, CONTRABAND_ITEMS } from '../shared/constants.js';
 import {
   generateNPCSafeHouse,
   findSafeHouseAtNetwork,
@@ -40,6 +40,7 @@ import {
 } from './db.js';
 import { getRigById, getModuleById } from '../shared/computerModels.js';
 import { initializeNpcMarket, loadMarketOrdersFromDb, updateOrderQuantityInDb, deleteOrderFromDb, startNpcTradingSimulation } from './npcMarket.js';
+import { initializeBlackMarket, getBlackMarketItems, buyContraband, sellContraband, getHeatPenalty, startBlackMarketLoop } from './blackmarket.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -325,6 +326,15 @@ function handleMessage(player, message) {
       break;
     case 'CONTRACT_CANCEL':
       handleContractCancel(player, payload);
+      break;
+    case 'BLACKMARKET_LIST':
+      handleBlackmarketList(player);
+      break;
+    case 'BLACKMARKET_BUY':
+      handleBlackmarketBuy(player, payload);
+      break;
+    case 'BLACKMARKET_SELL':
+      handleBlackmarketSell(player, payload);
       break;
     case 'REPAIR':
       handleRepair(player);
@@ -931,6 +941,8 @@ startGhostSpawnLoop(); // Start periodic ghost spawning
 startIntrusionProcessingLoop(); // Process intrusions and alerts
 startMarketCleanupLoop(); // Clean expired market orders
 startContractCleanupLoop(); // Clean expired contracts
+initializeBlackMarket(); // Initialize black market supply/demand
+startBlackMarketLoop(); // Start hourly price updates
 
 // Seed NPC Market Orders (async - loads from DB or seeds new)
 async function seedNpcMarket() {
@@ -1992,6 +2004,129 @@ function startContractCleanupLoop() {
     }
   }, 300000); // 5 minutes
 }
+
+// ============== BLACK MARKET HANDLERS ==============
+
+function handleBlackmarketList(player) {
+  // Check if player is in DarkNet
+  const currentZone = player.currentNetwork?.zone || 'clearnet';
+  if (BLACK_MARKET_CONFIG.darknetOnly && currentZone !== 'darknet') {
+    player.ws.send(JSON.stringify({
+      type: 'BLACKMARKET_LIST_RESULT',
+      payload: { error: 'Black Market only accessible in DarkNet zones.', restricted: true },
+    }));
+    return;
+  }
+
+  const items = getBlackMarketItems();
+  player.ws.send(JSON.stringify({
+    type: 'BLACKMARKET_LIST_RESULT',
+    payload: { items },
+  }));
+}
+
+function handleBlackmarketBuy(player, { itemId }) {
+  // Check zone restriction
+  const currentZone = player.currentNetwork?.zone || 'clearnet';
+  if (BLACK_MARKET_CONFIG.darknetOnly && currentZone !== 'darknet') {
+    player.ws.send(JSON.stringify({
+      type: 'BLACKMARKET_BUY_RESULT',
+      payload: { error: 'Black Market only accessible in DarkNet zones.' },
+    }));
+    return;
+  }
+
+  const result = buyContraband(itemId);
+  if (result.error) {
+    player.ws.send(JSON.stringify({
+      type: 'BLACKMARKET_BUY_RESULT',
+      payload: { error: result.error },
+    }));
+    return;
+  }
+
+  // Check credits
+  if (player.credits < result.price) {
+    player.ws.send(JSON.stringify({
+      type: 'BLACKMARKET_BUY_RESULT',
+      payload: { error: `Insufficient credits. Need ${result.price} CR.` },
+    }));
+    return;
+  }
+
+  // Deduct credits and apply heat
+  player.credits -= result.price;
+  player.heat = Math.min(100, (player.heat || 0) + getHeatPenalty());
+
+  // Add to player inventory (stored as contraband)
+  player.contraband = player.contraband || {};
+  player.contraband[itemId] = (player.contraband[itemId] || 0) + 1;
+
+  player.ws.send(JSON.stringify({
+    type: 'BLACKMARKET_BUY_RESULT',
+    payload: {
+      success: true,
+      itemId,
+      price: result.price,
+      credits: player.credits,
+      heat: player.heat,
+      heatGained: getHeatPenalty(),
+    },
+  }));
+
+  console.log(`[Black Market] ${player.ip} bought ${itemId} for ${result.price} CR (+${getHeatPenalty()} heat)`);
+}
+
+function handleBlackmarketSell(player, { itemId }) {
+  // Check zone restriction
+  const currentZone = player.currentNetwork?.zone || 'clearnet';
+  if (BLACK_MARKET_CONFIG.darknetOnly && currentZone !== 'darknet') {
+    player.ws.send(JSON.stringify({
+      type: 'BLACKMARKET_SELL_RESULT',
+      payload: { error: 'Black Market only accessible in DarkNet zones.' },
+    }));
+    return;
+  }
+
+  // Check if player has the item
+  const owned = player.contraband?.[itemId] || 0;
+  if (owned <= 0) {
+    player.ws.send(JSON.stringify({
+      type: 'BLACKMARKET_SELL_RESULT',
+      payload: { error: 'You don\'t have this item to sell.' },
+    }));
+    return;
+  }
+
+  const result = sellContraband(itemId);
+  if (result.error) {
+    player.ws.send(JSON.stringify({
+      type: 'BLACKMARKET_SELL_RESULT',
+      payload: { error: result.error },
+    }));
+    return;
+  }
+
+  // Add credits and apply heat
+  player.credits += result.price;
+  player.heat = Math.min(100, (player.heat || 0) + getHeatPenalty());
+  player.contraband[itemId]--;
+
+  player.ws.send(JSON.stringify({
+    type: 'BLACKMARKET_SELL_RESULT',
+    payload: {
+      success: true,
+      itemId,
+      price: result.price,
+      credits: player.credits,
+      heat: player.heat,
+      heatGained: getHeatPenalty(),
+    },
+  }));
+
+  console.log(`[Black Market] ${player.ip} sold ${itemId} for ${result.price} CR (+${getHeatPenalty()} heat)`);
+}
+
 function handleDefendView(player) {
   // Get all intrusions on networks owned by this player
   const ownedIntrusions = [];

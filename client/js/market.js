@@ -22,6 +22,7 @@ export class MarketUI {
   init() {
     this.createDOM();
     this.attachEvents();
+    this.setupBlackMarketEvents();
   }
 
   createDOM() {
@@ -40,6 +41,7 @@ export class MarketUI {
           <button class="market-tab active" data-tab="buy">Buy Orders</button>
           <button class="market-tab" data-tab="sell">Sell Orders</button>
           <button class="market-tab" data-tab="my-orders">My Orders</button>
+          <button class="market-tab" data-tab="blackmarket">⚠️ Black Market</button>
         </div>
 
         <!-- Body -->
@@ -260,6 +262,8 @@ export class MarketUI {
       this.renderMyOrders();
     } else if (this.currentTab === 'sell') {
       this.renderSellForm();
+    } else if (this.currentTab === 'blackmarket') {
+      this.renderBlackMarket();
     } else {
       this.renderTable();
     }
@@ -810,6 +814,167 @@ export class MarketUI {
       // Refresh after short delay
       setTimeout(() => this.requestMarketData(), 500);
     }
+  }
+
+  // ============== BLACK MARKET ==============
+
+  renderBlackMarket() {
+    // Request black market data if not yet loaded
+    if (!this.blackmarketItems) {
+      this.requestBlackMarketData();
+      this.tableBody.innerHTML = `
+        <tr><td colspan="5" style="text-align:center;color:#8b949e;padding:40px;">
+          Loading Black Market...
+        </td></tr>
+      `;
+      this.renderEmptyDetails();
+      return;
+    }
+
+    // Check for DarkNet restriction
+    if (this.blackmarketRestricted) {
+      this.tableBody.innerHTML = `
+        <tr><td colspan="5" style="text-align:center;padding:60px;">
+          <div style="color:#f85149;font-size:18px;margin-bottom:10px;">⚠️ ACCESS DENIED</div>
+          <div style="color:#8b949e;">Black Market only accessible in DarkNet zones.</div>
+          <div style="color:#6e7681;margin-top:10px;">Navigate to a DarkNet network to access contraband.</div>
+        </td></tr>
+      `;
+      this.renderEmptyDetails();
+      return;
+    }
+
+    // Render contraband items
+    const trendIcon = {
+      rising: '<span style="color:#3fb950;">⬆️</span>',
+      falling: '<span style="color:#f85149;">⬇️</span>',
+      stable: '<span style="color:#8b949e;">➡️</span>',
+    };
+
+    const supplyColor = {
+      abundant: '#3fb950',
+      normal: '#c9d1d9',
+      scarce: '#f0883e',
+      rare: '#f85149',
+    };
+
+    this.tableBody.innerHTML = this.blackmarketItems.map(item => `
+      <tr class="market-row" data-item-id="${item.id}">
+        <td>${item.name}</td>
+        <td>${trendIcon[item.trend] || ''} ${item.price} CR</td>
+        <td style="color:${supplyColor[item.supplyLevel]};text-transform:uppercase;">${item.supplyLevel}</td>
+        <td>${item.supply}</td>
+        <td>${item.available ? '<span style="color:#3fb950;">Yes</span>' : '<span style="color:#f85149;">Out</span>'}</td>
+      </tr>
+    `).join('');
+
+    // Attach click handlers
+    this.tableBody.querySelectorAll('.market-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const item = this.blackmarketItems.find(i => i.id === row.dataset.itemId);
+        if (item) {
+          this.renderBlackMarketDetails(item);
+          this.tableBody.querySelectorAll('.market-row').forEach(r => r.classList.remove('selected'));
+          row.classList.add('selected');
+        }
+      });
+    });
+
+    this.renderEmptyDetails();
+  }
+
+  renderBlackMarketDetails(item) {
+    const supplyColor = {
+      abundant: '#3fb950',
+      normal: '#c9d1d9',
+      scarce: '#f0883e',
+      rare: '#f85149',
+    };
+
+    this.detailsPanel.innerHTML = `
+      <div class="detail-header">
+        <span class="detail-name">${item.name}</span>
+        <span class="detail-type" style="color:#f0883e;">CONTRABAND</span>
+      </div>
+      <div class="detail-section">
+        <div class="detail-row">
+          <span class="detail-label">Description</span>
+          <span class="detail-value">${item.desc}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Price</span>
+          <span class="detail-value" style="color:#3fb950;">${item.price} CR</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Supply</span>
+          <span class="detail-value" style="color:${supplyColor[item.supplyLevel]};">${item.supplyLevel.toUpperCase()} (${item.supply})</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Demand</span>
+          <span class="detail-value">${item.demand}%</span>
+        </div>
+      </div>
+      <div class="detail-warning" style="color:#f0883e;background:#351c0c;padding:10px;border-radius:4px;margin:15px 0;">
+        ⚠️ +5 HEAT on transaction
+      </div>
+      <div class="detail-actions" id="blackmarket-actions">
+        ${item.available ? `
+          <button class="detail-btn buy" onclick="window.marketUI?.buyContraband('${item.id}')">🛒 Buy Now - ${item.price} CR</button>
+        ` : `
+          <button class="detail-btn" disabled style="opacity:0.5;">Out of Stock</button>
+        `}
+      </div>
+      <div id="blackmarket-result" style="text-align:center;margin-top:10px;"></div>
+    `;
+  }
+
+  requestBlackMarketData() {
+    if (this.game.ws && this.game.ws.readyState === WebSocket.OPEN) {
+      this.game.ws.send(JSON.stringify({ type: 'BLACKMARKET_LIST', payload: {} }));
+    }
+  }
+
+  buyContraband(itemId) {
+    if (this.game.ws && this.game.ws.readyState === WebSocket.OPEN) {
+      this.game.ws.send(JSON.stringify({
+        type: 'BLACKMARKET_BUY',
+        payload: { itemId }
+      }));
+      const resultEl = document.getElementById('blackmarket-result');
+      if (resultEl) resultEl.innerHTML = '<span style="color:#7d8590;">Processing...</span>';
+    }
+  }
+
+  setupBlackMarketEvents() {
+    // Black market list result
+    window.addEventListener('blackmarket-list-result', (e) => {
+      if (this.isOpen && e.detail) {
+        if (e.detail.restricted) {
+          this.blackmarketRestricted = true;
+          this.blackmarketItems = null;
+        } else {
+          this.blackmarketRestricted = false;
+          this.blackmarketItems = e.detail.items || [];
+        }
+        if (this.currentTab === 'blackmarket') {
+          this.renderBlackMarket();
+        }
+      }
+    });
+
+    // Black market buy result  
+    window.addEventListener('blackmarket-buy-result', (e) => {
+      if (this.isOpen && e.detail) {
+        const resultEl = document.getElementById('blackmarket-result');
+        if (e.detail.success) {
+          if (resultEl) resultEl.innerHTML = `<span style="color:#3fb950;">✓ Purchased! -${e.detail.price} CR (+${e.detail.heatGained} heat)</span>`;
+          // Refresh data
+          setTimeout(() => this.requestBlackMarketData(), 500);
+        } else {
+          if (resultEl) resultEl.innerHTML = `<span style="color:#f85149;">${e.detail.error || 'Purchase failed'}</span>`;
+        }
+      }
+    });
   }
 }
 

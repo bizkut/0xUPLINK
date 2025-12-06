@@ -215,7 +215,13 @@
   - 8 NPC vendors with price modifiers
   - MARKET_MODIFY handler with Eve-style bid/ask rules
   - 2-minute order modification cooldown
-- [ ] Black market with dynamic prices
+- [x] **Black Market with Dynamic Prices** (Completed 2025-12-07)
+  - DarkNet-only contraband trading
+  - 7 contraband items: Stolen Credentials, Hot Data, Exploit Kit, etc.
+  - Dynamic pricing with supply/demand and volatility (±15%)
+  - Supply levels: Abundant → Rare (0.8x-1.5x price)
+  - +5 Heat penalty per transaction
+  - Price trends display (⬆️/⬇️/➡️)
 - [x] **Death/Loss Consequences** (Completed 2025-12-06)
   - Added `DEATH_CONFIG` constant with trace/kill penalties
   - Player model: rigIntegrity, homeSafeHouse, respawnProtection
