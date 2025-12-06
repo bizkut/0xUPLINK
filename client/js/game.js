@@ -1,7 +1,11 @@
 import { HARDWARE_TIERS, ICE_TYPES, SOFTWARE_TYPES, NODE_TYPES, GAME_CONFIG, COMMANDS, RESOURCES, SOVEREIGNTY_STRUCTURES, ORGANIZATION_TYPES, HEAT_THRESHOLDS } from '../../shared/constants.js';
+import { COMPUTER_CLASSES, RIG_MODULES, getRigById, getModuleById, calculateEffectiveStats, canEquipModule } from '../../shared/computerModels.js';
 
 export class Game {
   constructor() {
+    // Default to Burner rig
+    const starterRig = COMPUTER_CLASSES.BURNER;
+
     this.state = {
       player: {
         id: null,
@@ -11,9 +15,22 @@ export class Game {
         heat: 0,
         faction: null,
         organization: null, // { id, name, role }
+        // Computer rig system
+        rig: {
+          class: starterRig,
+          equippedModules: {
+            core: [],
+            memory: [],
+            expansion: [],
+          },
+        },
         hardware: {
-          tier: 0,
-          ...HARDWARE_TIERS[0],
+          tier: starterRig.tier,
+          name: starterRig.name,
+          cpu: starterRig.baseCpu,
+          ram: starterRig.baseRam,
+          bandwidth: starterRig.baseBandwidth,
+          traceResist: (starterRig.bonuses.traceResist - 1) * 100, // Convert to percentage
           cpuUsed: 0,
           ramUsed: 0,
           integrity: 100,
@@ -1002,5 +1019,195 @@ export class Game {
 
   delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // === Rig Management ===
+
+  // Get available rig classes for purchase/selection
+  getAvailableRigs() {
+    return Object.values(COMPUTER_CLASSES);
+  }
+
+  // Get available modules for purchase
+  getAvailableModules() {
+    return Object.values(RIG_MODULES);
+  }
+
+  // Get current rig info with effective stats
+  getRigInfo() {
+    const rig = this.state.player.rig;
+    const allModules = [
+      ...rig.equippedModules.core,
+      ...rig.equippedModules.memory,
+      ...rig.equippedModules.expansion,
+    ];
+    const effectiveStats = calculateEffectiveStats(rig.class, allModules);
+
+    return {
+      class: rig.class,
+      slots: {
+        core: { used: rig.equippedModules.core.length, max: rig.class.slots.core },
+        memory: { used: rig.equippedModules.memory.length, max: rig.class.slots.memory },
+        expansion: { used: rig.equippedModules.expansion.length, max: rig.class.slots.expansion },
+      },
+      equippedModules: rig.equippedModules,
+      effectiveStats,
+    };
+  }
+
+  // Switch to a different rig class
+  async selectRig(rigId) {
+    const newRig = getRigById(rigId);
+    if (!newRig) {
+      return { success: false, error: `Unknown rig class: ${rigId}` };
+    }
+
+    // Check if player can afford it
+    if (this.state.player.credits < newRig.price) {
+      return { success: false, error: `Insufficient credits. Need ${newRig.price} CR.` };
+    }
+
+    // Cannot switch while connected
+    if (this.state.connection.active) {
+      return { success: false, error: 'Cannot switch rig while connected to a target.' };
+    }
+
+    // Deduct credits
+    this.state.player.credits -= newRig.price;
+
+    // Unequip all modules (they go back to inventory)
+    const oldModules = [
+      ...this.state.player.rig.equippedModules.core,
+      ...this.state.player.rig.equippedModules.memory,
+      ...this.state.player.rig.equippedModules.expansion,
+    ];
+
+    // Set new rig
+    this.state.player.rig = {
+      class: newRig,
+      equippedModules: {
+        core: [],
+        memory: [],
+        expansion: [],
+      },
+    };
+
+    // Recalculate hardware stats
+    this.recalculateHardware();
+
+    return {
+      success: true,
+      rig: newRig,
+      unequippedModules: oldModules,
+      message: `Switched to ${newRig.name}. Previous modules unequipped.`,
+    };
+  }
+
+  // Equip a module to the rig
+  equipModule(moduleId) {
+    const module = getModuleById(moduleId);
+    if (!module) {
+      return { success: false, error: `Unknown module: ${moduleId}` };
+    }
+
+    const rig = this.state.player.rig;
+    const slotType = module.slotType;
+    const slots = rig.equippedModules[slotType];
+    const maxSlots = rig.class.slots[slotType];
+
+    if (slots.length >= maxSlots) {
+      return { success: false, error: `No ${slotType} slots available (${slots.length}/${maxSlots}).` };
+    }
+
+    // Check CPU cost
+    const currentCpuUsed = this.getTotalModuleCpuCost();
+    if (currentCpuUsed + module.cpuCost > this.state.player.hardware.cpu) {
+      return { success: false, error: `Insufficient CPU. Need ${module.cpuCost}, have ${this.state.player.hardware.cpu - currentCpuUsed} free.` };
+    }
+
+    // Check RAM cost
+    const currentRamUsed = this.getTotalModuleRamCost();
+    if (currentRamUsed + module.ramCost > this.state.player.hardware.ram) {
+      return { success: false, error: `Insufficient RAM. Need ${module.ramCost}, have ${this.state.player.hardware.ram - currentRamUsed} free.` };
+    }
+
+    // Equip the module
+    slots.push(module);
+    this.recalculateHardware();
+
+    return {
+      success: true,
+      module,
+      message: `Equipped ${module.name} to ${slotType} slot.`,
+    };
+  }
+
+  // Unequip a module from the rig
+  unequipModule(moduleId) {
+    const rig = this.state.player.rig;
+
+    for (const slotType of ['core', 'memory', 'expansion']) {
+      const slots = rig.equippedModules[slotType];
+      const index = slots.findIndex(m => m.id === moduleId);
+
+      if (index !== -1) {
+        const module = slots.splice(index, 1)[0];
+        this.recalculateHardware();
+        return {
+          success: true,
+          module,
+          message: `Unequipped ${module.name}.`,
+        };
+      }
+    }
+
+    return { success: false, error: `Module not equipped: ${moduleId}` };
+  }
+
+  // Get total CPU cost of all equipped modules
+  getTotalModuleCpuCost() {
+    const rig = this.state.player.rig;
+    let total = 0;
+    for (const slotType of ['core', 'memory', 'expansion']) {
+      for (const mod of rig.equippedModules[slotType]) {
+        total += mod.cpuCost || 0;
+      }
+    }
+    return total;
+  }
+
+  // Get total RAM cost of all equipped modules
+  getTotalModuleRamCost() {
+    const rig = this.state.player.rig;
+    let total = 0;
+    for (const slotType of ['core', 'memory', 'expansion']) {
+      for (const mod of rig.equippedModules[slotType]) {
+        total += mod.ramCost || 0;
+      }
+    }
+    return total;
+  }
+
+  // Recalculate hardware stats based on rig and modules
+  recalculateHardware() {
+    const rig = this.state.player.rig;
+    const allModules = [
+      ...rig.equippedModules.core,
+      ...rig.equippedModules.memory,
+      ...rig.equippedModules.expansion,
+    ];
+    const stats = calculateEffectiveStats(rig.class, allModules);
+
+    this.state.player.hardware = {
+      tier: rig.class.tier,
+      name: rig.class.name,
+      cpu: stats.cpu,
+      ram: stats.ram,
+      bandwidth: stats.bandwidth,
+      traceResist: Math.round((stats.traceResist - 1) * 100),
+      cpuUsed: this.getTotalModuleCpuCost(),
+      ramUsed: this.getTotalModuleRamCost(),
+      integrity: this.state.player.hardware?.integrity || 100,
+    };
   }
 }

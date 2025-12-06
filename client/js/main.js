@@ -304,7 +304,19 @@ class App {
         await this.cmdRepair();
         break;
       case 'rig':
-        await this.cmdRig();
+        await this.cmdRig(args);
+        break;
+      case 'rigs':
+        this.cmdRigs();
+        break;
+      case 'fit':
+        this.cmdFit(args);
+        break;
+      case 'unfit':
+        this.cmdUnfit(args);
+        break;
+      case 'modules':
+        this.cmdModules();
         break;
       case 'say':
         await this.cmdSay(args);
@@ -1578,32 +1590,153 @@ class App {
 
   // === RIG & REPAIR COMMANDS ===
 
-  async cmdRig() {
-    const result = await this.game.sendMessage('RIG_STATUS', {});
+  async cmdRig(args) {
+    // If no args, show current rig status
+    if (!args || args.length === 0) {
+      const rigInfo = this.game.getRigInfo();
+      const rig = rigInfo.class;
+
+      this.terminal.print('═══════════════════════════════════════', 'info');
+      this.terminal.print(`  RIG: ${rig.name.toUpperCase()}`, 'highlight');
+      this.terminal.print('═══════════════════════════════════════', 'info');
+      this.terminal.print(`  ${rig.description}`, 'system');
+      this.terminal.print(`  Specialty: ${rig.specialty}`, 'info');
+      this.terminal.print('', 'system');
+
+      // Stats
+      this.terminal.print('─── STATS ───', 'info');
+      const hw = this.game.state.player.hardware;
+      this.terminal.print(`  CPU: ${hw.cpuUsed}/${hw.cpu}`, 'system');
+      this.terminal.print(`  RAM: ${hw.ramUsed}/${hw.ram} MB`, 'system');
+      this.terminal.print(`  Bandwidth: ${hw.bandwidth} Mbps`, 'system');
+      this.terminal.print(`  Trace Resist: ${hw.traceResist}%`, hw.traceResist > 0 ? 'success' : 'system');
+      this.terminal.print(`  Integrity: ${hw.integrity}%`, hw.integrity > 50 ? 'success' : 'warning');
+
+      // Slots
+      this.terminal.print('', 'system');
+      this.terminal.print('─── SLOTS ───', 'info');
+      this.terminal.print(`  Core:      ${rigInfo.slots.core.used}/${rigInfo.slots.core.max}`, 'system');
+      this.terminal.print(`  Memory:    ${rigInfo.slots.memory.used}/${rigInfo.slots.memory.max}`, 'system');
+      this.terminal.print(`  Expansion: ${rigInfo.slots.expansion.used}/${rigInfo.slots.expansion.max}`, 'system');
+
+      // Equipped modules
+      if (rigInfo.equippedModules.core.length || rigInfo.equippedModules.memory.length || rigInfo.equippedModules.expansion.length) {
+        this.terminal.print('', 'system');
+        this.terminal.print('─── EQUIPPED ───', 'info');
+        for (const slotType of ['core', 'memory', 'expansion']) {
+          for (const mod of rigInfo.equippedModules[slotType]) {
+            this.terminal.print(`  [${slotType.toUpperCase()}] ${mod.name}`, 'highlight');
+          }
+        }
+      }
+
+      this.terminal.print('', 'system');
+      this.terminal.print('Commands: rigs | fit <module_id> | unfit <module_id> | modules', 'info');
+      return;
+    }
+
+    // rig buy <id> - purchase and switch to a new rig
+    if (args[0] === 'buy' && args[1]) {
+      const rigId = args[1].toLowerCase();
+      const result = await this.game.selectRig(rigId);
+
+      if (result.error) {
+        this.terminal.print(result.error, 'error');
+        return;
+      }
+
+      this.terminal.print(result.message, 'success');
+      this.terminal.print(`New rig: ${result.rig.name} - ${result.rig.description}`, 'highlight');
+      this.terminal.print(`Specialty: ${result.rig.specialty}`, 'info');
+      return;
+    }
+
+    this.terminal.print('Usage: rig | rig buy <rig_id>', 'error');
+  }
+
+  cmdRigs() {
+    const rigs = this.game.getAvailableRigs();
+
+    this.terminal.print('═══════════════════════════════════════', 'info');
+    this.terminal.print('  AVAILABLE RIGS', 'highlight');
+    this.terminal.print('═══════════════════════════════════════', 'info');
+
+    for (const rig of rigs) {
+      const owned = this.game.state.player.rig.class.id === rig.id;
+      const priceStr = rig.price === 0 ? 'FREE' : `${rig.price.toLocaleString()} CR`;
+
+      this.terminal.print('', 'system');
+      this.terminal.print(`${owned ? '► ' : '  '}${rig.name.toUpperCase()} [${rig.id}]`, owned ? 'success' : 'highlight');
+      this.terminal.print(`  ${rig.description}`, 'system');
+      this.terminal.print(`  Specialty: ${rig.specialty} | Price: ${priceStr}`, 'info');
+      this.terminal.print(`  CPU: ${rig.baseCpu} | RAM: ${rig.baseRam} | BW: ${rig.baseBandwidth}`, 'system');
+      this.terminal.print(`  Slots: Core[${rig.slots.core}] Mem[${rig.slots.memory}] Exp[${rig.slots.expansion}]`, 'system');
+    }
+
+    this.terminal.print('', 'system');
+    this.terminal.print('Use: rig buy <rig_id> to purchase', 'info');
+  }
+
+  cmdModules() {
+    const modules = this.game.getAvailableModules();
+
+    this.terminal.print('═══════════════════════════════════════', 'info');
+    this.terminal.print('  AVAILABLE MODULES', 'highlight');
+    this.terminal.print('═══════════════════════════════════════', 'info');
+
+    const grouped = { core: [], memory: [], expansion: [] };
+    for (const mod of modules) {
+      grouped[mod.slotType].push(mod);
+    }
+
+    for (const slotType of ['core', 'memory', 'expansion']) {
+      this.terminal.print('', 'system');
+      this.terminal.print(`─── ${slotType.toUpperCase()} MODULES ───`, 'info');
+      for (const mod of grouped[slotType]) {
+        this.terminal.print(`  ${mod.name} [${mod.id}]`, 'highlight');
+        this.terminal.print(`    ${mod.description}`, 'system');
+        this.terminal.print(`    CPU: ${mod.cpuCost} | RAM: ${mod.ramCost} | ${mod.price.toLocaleString()} CR`, 'info');
+      }
+    }
+
+    this.terminal.print('', 'system');
+    this.terminal.print('Use: fit <module_id> to equip', 'info');
+  }
+
+  cmdFit(args) {
+    if (!args || args.length === 0) {
+      this.terminal.print('Usage: fit <module_id>', 'error');
+      this.terminal.print('Use "modules" to see available modules.', 'info');
+      return;
+    }
+
+    const moduleId = args[0].toLowerCase();
+    const result = this.game.equipModule(moduleId);
 
     if (result.error) {
       this.terminal.print(result.error, 'error');
       return;
     }
 
-    this.terminal.print('=== RIG STATUS ===', 'info');
+    this.terminal.print(result.message, 'success');
+  }
 
-    const integrityColor = result.integrity > 50 ? 'success' :
-      result.integrity > 25 ? 'warning' : 'error';
-    this.terminal.print(`Integrity: ${result.integrity}/${result.maxIntegrity}`, integrityColor);
-
-    if (result.isDegraded) {
-      this.terminal.print('STATUS: DEGRADED - Performance reduced 50%', 'error');
-    } else if (result.integrity < result.maxIntegrity) {
-      this.terminal.print('STATUS: Damaged', 'warning');
-    } else {
-      this.terminal.print('STATUS: Optimal', 'success');
+  cmdUnfit(args) {
+    if (!args || args.length === 0) {
+      this.terminal.print('Usage: unfit <module_id>', 'error');
+      this.terminal.print('Use "rig" to see equipped modules.', 'info');
+      return;
     }
 
-    if (result.repairCost > 0) {
-      this.terminal.print(`Repair cost: ${result.repairCost} CR`, 'system');
-      this.terminal.print('Use "repair" to fix at a Safe House.', 'info');
+    const moduleId = args[0].toLowerCase();
+    const result = this.game.unequipModule(moduleId);
+
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
     }
+
+    this.terminal.print(result.message, 'success');
   }
 
   async cmdRepair() {
