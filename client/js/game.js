@@ -117,11 +117,16 @@ export class Game {
         break;
       case 'INTRUSION_ALERT':
         console.log('[Game] Intrusion from:', payload.attackerIp);
-        // Could dispatch custom event for UI
         window.dispatchEvent(new CustomEvent('intrusion-alert', { detail: payload }));
         break;
       case 'HACK_ACTIVITY':
         console.log('[Game] Hack activity:', payload);
+        break;
+      case 'CHAT_MESSAGE':
+        window.dispatchEvent(new CustomEvent('chat-message', { detail: payload }));
+        break;
+      case 'PLAYER_COUNT':
+        window.dispatchEvent(new CustomEvent('player-count', { detail: payload }));
         break;
       default:
         // Most messages are responses, handled by pendingCallbacks

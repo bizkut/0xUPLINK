@@ -48,6 +48,8 @@ class App {
     // Initialize sidebar with command handler
     this.ui.initSidebar((cmd) => this.handleCommand(cmd));
 
+    // Initialize chat system
+    this.initChat();
     // Initial sidebar status update
     this.updateSidebarStatus();
   }
@@ -1748,6 +1750,88 @@ class App {
     } else {
       this.terminal.print('Unknown subcommand. Use: spec choose <path> | spec learn <skill_id>', 'error');
     }
+  }
+
+  initChat() {
+    const chatInput = document.getElementById('chat-input');
+    const chatSendBtn = document.getElementById('chat-send-btn');
+    const chatMessages = document.getElementById('chat-messages');
+    const onlineCount = document.getElementById('chat-online-count');
+
+    if (!chatInput || !chatSendBtn || !chatMessages) return;
+
+    // Send chat message
+    const sendMessage = () => {
+      const message = chatInput.value.trim();
+      if (!message) return;
+
+      // Send to server
+      this.game.sendMessage('CHAT_SEND', {
+        channel: 'global',
+        message: message,
+      });
+
+      chatInput.value = '';
+    };
+
+    // Enter key to send
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Send button click
+    chatSendBtn.addEventListener('click', sendMessage);
+
+    // Listen for incoming chat messages
+    window.addEventListener('chat-message', (e) => {
+      const { sender, title, titleColor, message, timestamp } = e.detail;
+      const time = new Date(timestamp).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+
+      const isSelf = sender === this.game.state.player.ip;
+
+      const msgEl = document.createElement('div');
+      msgEl.className = 'chat-message';
+      msgEl.innerHTML = `
+        <span class="chat-time">[${time}]</span>
+        <span class="chat-user${isSelf ? ' self' : ''}">[${title || 'Anon'}] ${sender}:</span>
+        <span class="chat-text">${this.escapeHtml(message)}</span>
+      `;
+
+      chatMessages.appendChild(msgEl);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      // Limit message history to 100 messages
+      while (chatMessages.children.length > 100) {
+        chatMessages.removeChild(chatMessages.firstChild);
+      }
+    });
+
+    // Listen for player count updates
+    window.addEventListener('player-count', (e) => {
+      const { count } = e.detail;
+      if (onlineCount) {
+        onlineCount.textContent = `${count} online`;
+      }
+    });
+
+    // Add welcome message
+    const welcomeEl = document.createElement('div');
+    welcomeEl.className = 'chat-message system';
+    welcomeEl.textContent = 'Connected to global chat. All messages are visible to all players.';
+    chatMessages.appendChild(welcomeEl);
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }
 
