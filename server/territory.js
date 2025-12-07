@@ -2,6 +2,7 @@
 // GreyNet faction warfare with influence-based capture mechanics
 
 import { TERRITORY_CONFIG } from '../shared/constants.js';
+import { broadcastTerritoryCaptured, broadcastTerritoryCaptureStart, broadcastTerritoryContested } from './realtime.js';
 
 // Territory state: { networkId -> territory info }
 const territories = new Map();
@@ -74,6 +75,12 @@ export function startCapture(player, networkId, networkZone) {
 
     const territory = territories.get(networkId);
     const isContested = capturers.length > 1 || (territory.ownerId && territory.ownerId !== player.id);
+
+    // Broadcast capture start
+    broadcastTerritoryCaptureStart(player.id, player.ip, networkId);
+    if (isContested) {
+        broadcastTerritoryContested(networkId, player.id, player.ip);
+    }
 
     return {
         success: true,
@@ -152,6 +159,9 @@ export function processTerritoryTick(gameState, broadcastToPlayer) {
                             payload: { networkId, message: 'Territory captured!' },
                         }));
                     }
+
+                    // Broadcast via Supabase Realtime
+                    broadcastTerritoryCaptured(capturer.playerId, capturer.playerName, networkId);
 
                     // Remove from active capturers
                     activeCapturers.delete(networkId);

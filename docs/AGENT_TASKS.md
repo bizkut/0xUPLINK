@@ -284,6 +284,12 @@
 - [x] **Player Persistence** (Completed 2025-12-06)
   - Save/load player state to Supabase PostgreSQL
   - Graceful fallback when database unavailable
+- [x] **Supabase Realtime Broadcast** (Completed 2025-12-07)
+  - Pub/sub messaging using Supabase Realtime Broadcast (replaces Redis)
+  - Server: `server/realtime.js` module with channel broadcasts
+  - Client: `client/js/realtime.js` with subscriptions and toast notifications
+  - Channels: game:global, game:territory, game:market
+  - Events: ghost spawns, territory captures, black market prices
 - [ ] Rate limiting
 - [ ] Admin tools
 

@@ -5,6 +5,7 @@ import { UI } from './ui.js';
 import { MarketUI } from './market.js';
 import { ContractUI } from './contracts.js';
 import { SECTORS, SECURITY_ZONES, SOVEREIGNTY_STRUCTURES, HEAT_THRESHOLDS } from '../../shared/constants.js';
+import { initRealtimeClient, showToast } from './realtime.js';
 
 class App {
   constructor() {
@@ -37,6 +38,14 @@ class App {
 
     // Show login screen (game starts hidden until authenticated)
     this.loginScreen = new window.LoginScreen(this.game);
+
+    // Initialize Supabase Realtime for notifications
+    // Get credentials from environment or hardcode for now
+    const supabaseUrl = window.SUPABASE_URL || null;
+    const supabaseKey = window.SUPABASE_KEY || null;
+    if (supabaseUrl && supabaseKey) {
+      initRealtimeClient(supabaseUrl, supabaseKey);
+    }
 
     // Initialize Market UI
     this.marketUI = new MarketUI(this.game);

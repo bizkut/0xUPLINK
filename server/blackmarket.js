@@ -2,6 +2,7 @@
 // Dynamic pricing with supply/demand mechanics for contraband items
 
 import { BLACK_MARKET_CONFIG, CONTRABAND_ITEMS } from '../shared/constants.js';
+import { broadcastBlackmarketPriceChange } from './realtime.js';
 
 // In-memory state for black market
 const blackMarketState = {
@@ -128,6 +129,14 @@ export function updateBlackMarketPrices() {
         // Keep only last 24 entries (24 hours of history)
         if (history.length > 24) {
             history.shift();
+        }
+
+        // Broadcast significant price changes (>5%)
+        if (history.length >= 2) {
+            const prev = history[history.length - 2].price;
+            if (Math.abs(price - prev) / prev > 0.05) {
+                broadcastBlackmarketPriceChange(item, prev, price);
+            }
         }
 
         // Decay demand slightly

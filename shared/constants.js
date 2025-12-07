@@ -563,6 +563,34 @@ export const TERRITORY_CONFIG = {
   maxTerritories: 10,           // Max territories per player
 };
 
+// Supabase Realtime Broadcast Configuration
+export const REALTIME_CHANNELS = {
+  GLOBAL: 'game:global',           // Global announcements (ghost spawns, server events)
+  TERRITORY: 'game:territory',     // Territory capture alerts
+  MARKET: 'game:market',           // Price updates, new listings
+  CHAT_GLOBAL: 'chat:global',      // Global chat (backup to WebSocket)
+};
+
+export const REALTIME_EVENTS = {
+  // Ghost Network Events
+  GHOST_SPAWN: 'ghost_spawn',
+  GHOST_EXPIRE: 'ghost_expire',
+
+  // Territory Events
+  TERRITORY_CAPTURE_START: 'territory_capture_start',
+  TERRITORY_CAPTURED: 'territory_captured',
+  TERRITORY_CONTESTED: 'territory_contested',
+  TERRITORY_LOST: 'territory_lost',
+
+  // Market Events
+  MARKET_PRICE_UPDATE: 'market_price_update',
+  MARKET_NEW_LISTING: 'market_new_listing',
+  BLACKMARKET_PRICE_CHANGE: 'blackmarket_price_change',
+
+  // Player Events
+  PLAYER_INTRUSION_ALERT: 'player_intrusion_alert',
+};
+
 export const DEATH_CONFIG = {
   // When traced (caught)
   traceConsequences: {

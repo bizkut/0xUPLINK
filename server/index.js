@@ -42,6 +42,7 @@ import { getRigById, getModuleById } from '../shared/computerModels.js';
 import { initializeNpcMarket, loadMarketOrdersFromDb, updateOrderQuantityInDb, deleteOrderFromDb, startNpcTradingSimulation } from './npcMarket.js';
 import { initializeBlackMarket, getBlackMarketItems, buyContraband, sellContraband, getHeatPenalty, startBlackMarketLoop } from './blackmarket.js';
 import { initializeTerritories, getTerritoryStatus, getPlayerTerritories, startCapture, stopCapture, startTerritoryLoops, getAllTerritories } from './territory.js';
+import { initRealtime, broadcastGhostSpawn, broadcastGhostExpire, broadcastTerritoryCaptured, broadcastTerritoryCaptureStart, broadcastTerritoryContested, broadcastBlackmarketPriceChange } from './realtime.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -955,6 +956,7 @@ initializeBlackMarket(); // Initialize black market supply/demand
 startBlackMarketLoop(); // Start hourly price updates
 initializeTerritories(); // Initialize territory control
 startTerritoryLoops(gameState); // Start territory processing loops
+initRealtime(); // Initialize Supabase Realtime broadcasts
 
 // Seed NPC Market Orders (async - loads from DB or seeds new)
 async function seedNpcMarket() {
@@ -2926,6 +2928,9 @@ function spawnGhostNetwork() {
     }
   }
 
+  // Broadcast via Supabase Realtime
+  broadcastGhostSpawn(ghost);
+
   return ghost;
 }
 
@@ -2946,6 +2951,9 @@ function cleanupExpiredGhosts() {
           }));
         }
       }
+
+      // Broadcast via Supabase Realtime
+      broadcastGhostExpire(ghost);
 
       gameState.ghostNetworks.delete(id);
     }
