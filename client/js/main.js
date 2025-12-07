@@ -423,6 +423,12 @@ class App {
       case 'spec':
         await this.cmdSpec(args);
         break;
+      case 'territory':
+        await this.cmdTerritory(args);
+        break;
+      case 'capture':
+        await this.cmdCapture(args);
+        break;
       default:
         this.terminal.print(`Unknown command: ${cmd}`, 'error');
         this.terminal.print('Type "help" for available commands.', 'system');
@@ -2170,6 +2176,99 @@ class App {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ============== TERRITORY COMMANDS ==============
+
+  async cmdTerritory(args) {
+    if (args[0] === 'list') {
+      // List owned territories
+      const result = await this.game.sendMessage('TERRITORY_LIST', {});
+      if (result.error) {
+        this.terminal.print(result.error, 'error');
+        return;
+      }
+
+      this.terminal.print('=== YOUR TERRITORIES ===', 'info');
+      if (result.owned && result.owned.length > 0) {
+        result.owned.forEach(t => {
+          const status = t.influence >= 100 ? '[CONTROLLED]' : `[${t.influence}%]`;
+          this.terminal.print(`  ${t.networkId} ${status}`, t.contested ? 'warning' : 'success');
+        });
+        this.terminal.print('', '');
+        this.terminal.print(`Total controlled: ${result.owned.length}`, 'system');
+      } else {
+        this.terminal.print('  No territories claimed.', 'system');
+        this.terminal.print('  Use "capture" while in a GreyNet network to claim.', 'system');
+      }
+      return;
+    }
+
+    // Show current network territory status
+    const result = await this.game.sendMessage('TERRITORY_STATUS', {});
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print('=== TERRITORY STATUS ===', 'info');
+    this.terminal.print(`Network: ${result.networkId}`, 'system');
+    this.terminal.print(`Zone: ${result.zone?.toUpperCase() || 'UNKNOWN'}`, 'system');
+
+    const status = result.status;
+    if (status.ownerName) {
+      this.terminal.print(`Owner: ${status.ownerName}`, status.contested ? 'warning' : 'highlight');
+      if (status.crewName) {
+        this.terminal.print(`Crew: ${status.crewName}`, 'system');
+      }
+    } else {
+      this.terminal.print('Owner: UNCLAIMED', 'system');
+    }
+    this.terminal.print(`Influence: ${status.influence}%`, 'system');
+
+    if (status.contested) {
+      this.terminal.print('⚠️ CONTESTED - Multiple claimants!', 'warning');
+    }
+
+    if (result.zone !== 'greynet') {
+      this.terminal.print('', '');
+      this.terminal.print('Note: Only GreyNet networks can be captured.', 'system');
+    }
+  }
+
+  async cmdCapture(args) {
+    if (args[0] === 'stop') {
+      const result = await this.game.sendMessage('TERRITORY_CAPTURE', { action: 'stop' });
+      if (result.error) {
+        this.terminal.print(result.error, 'error');
+      } else {
+        this.terminal.print('Capture stopped.', 'system');
+      }
+      return;
+    }
+
+    // Start capture
+    const result = await this.game.sendMessage('TERRITORY_CAPTURE', { action: 'start' });
+    if (result.error) {
+      this.terminal.print(result.error, 'error');
+      return;
+    }
+
+    this.terminal.print('=== TERRITORY CAPTURE ===', 'info');
+    this.terminal.print(result.message, result.contested ? 'warning' : 'success');
+
+    if (result.currentOwner) {
+      this.terminal.print(`Current owner: ${result.currentOwner}`, 'system');
+    }
+    this.terminal.print(`Influence: ${result.currentInfluence || 0}%`, 'system');
+
+    if (result.contested) {
+      this.terminal.print('⚠️ Contested capture - influence will decay!', 'warning');
+    }
+
+    this.terminal.print('', '');
+    this.terminal.print('Capture will progress while you remain connected.', 'system');
+    this.terminal.print('Use "capture stop" to stop capturing.', 'system');
   }
 }
 

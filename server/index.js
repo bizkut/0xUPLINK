@@ -41,6 +41,7 @@ import {
 import { getRigById, getModuleById } from '../shared/computerModels.js';
 import { initializeNpcMarket, loadMarketOrdersFromDb, updateOrderQuantityInDb, deleteOrderFromDb, startNpcTradingSimulation } from './npcMarket.js';
 import { initializeBlackMarket, getBlackMarketItems, buyContraband, sellContraband, getHeatPenalty, startBlackMarketLoop } from './blackmarket.js';
+import { initializeTerritories, getTerritoryStatus, getPlayerTerritories, startCapture, stopCapture, startTerritoryLoops, getAllTerritories } from './territory.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -335,6 +336,15 @@ function handleMessage(player, message) {
       break;
     case 'BLACKMARKET_SELL':
       handleBlackmarketSell(player, payload);
+      break;
+    case 'TERRITORY_STATUS':
+      handleTerritoryStatus(player, payload, message.messageId);
+      break;
+    case 'TERRITORY_CAPTURE':
+      handleTerritoryCapture(player, payload, message.messageId);
+      break;
+    case 'TERRITORY_LIST':
+      handleTerritoryList(player, message.messageId);
       break;
     case 'REPAIR':
       handleRepair(player);
@@ -943,6 +953,8 @@ startMarketCleanupLoop(); // Clean expired market orders
 startContractCleanupLoop(); // Clean expired contracts
 initializeBlackMarket(); // Initialize black market supply/demand
 startBlackMarketLoop(); // Start hourly price updates
+initializeTerritories(); // Initialize territory control
+startTerritoryLoops(gameState); // Start territory processing loops
 
 // Seed NPC Market Orders (async - loads from DB or seeds new)
 async function seedNpcMarket() {
@@ -2125,6 +2137,93 @@ function handleBlackmarketSell(player, { itemId }) {
   }));
 
   console.log(`[Black Market] ${player.ip} sold ${itemId} for ${result.price} CR (+${getHeatPenalty()} heat)`);
+}
+
+// ============== TERRITORY HANDLERS ==============
+
+function handleTerritoryStatus(player, { networkId }, messageId) {
+  const targetNetworkId = networkId || player.currentNetworkId;
+
+  if (!targetNetworkId) {
+    player.ws.send(JSON.stringify({
+      type: 'TERRITORY_STATUS_RESULT',
+      messageId,
+      payload: { error: 'No network specified.' },
+    }));
+    return;
+  }
+
+  const status = getTerritoryStatus(targetNetworkId);
+  const network = gameState.universe?.networks?.[targetNetworkId];
+
+  player.ws.send(JSON.stringify({
+    type: 'TERRITORY_STATUS_RESULT',
+    messageId,
+    payload: {
+      networkId: targetNetworkId,
+      zone: network?.zone || 'unknown',
+      status: status || { ownerId: null, ownerName: null, influence: 0, contested: false },
+    },
+  }));
+}
+
+function handleTerritoryCapture(player, { action }, messageId) {
+  // Get current network
+  const networkId = player.currentNetworkId;
+  const network = player.currentNetwork || gameState.universe?.networks?.[networkId];
+
+  if (!networkId || !network) {
+    player.ws.send(JSON.stringify({
+      type: 'TERRITORY_CAPTURE_RESULT',
+      messageId,
+      payload: { error: 'You must be connected to a network to capture it.' },
+    }));
+    return;
+  }
+
+  if (action === 'stop') {
+    stopCapture(player.id, networkId);
+    player.ws.send(JSON.stringify({
+      type: 'TERRITORY_CAPTURE_RESULT',
+      messageId,
+      payload: { success: true, message: 'Capture stopped.' },
+    }));
+    return;
+  }
+
+  // Start capture
+  const result = startCapture(player, networkId, network.zone);
+
+  if (result.error) {
+    player.ws.send(JSON.stringify({
+      type: 'TERRITORY_CAPTURE_RESULT',
+      messageId,
+      payload: { error: result.error },
+    }));
+    return;
+  }
+
+  player.ws.send(JSON.stringify({
+    type: 'TERRITORY_CAPTURE_RESULT',
+    messageId,
+    payload: result,
+  }));
+
+  console.log(`[Territory] ${player.ip} started capturing ${networkId}`);
+}
+
+function handleTerritoryList(player, messageId) {
+  const owned = getPlayerTerritories(player.id);
+  const all = getAllTerritories();
+
+  player.ws.send(JSON.stringify({
+    type: 'TERRITORY_LIST_RESULT',
+    messageId,
+    payload: {
+      owned,
+      total: all.length,
+    },
+  }));
 }
 
 function handleDefendView(player) {

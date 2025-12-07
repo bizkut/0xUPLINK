@@ -215,6 +215,18 @@ export class Game {
       case 'BLACKMARKET_SELL_RESULT':
         window.dispatchEvent(new CustomEvent('blackmarket-sell-result', { detail: payload }));
         break;
+      case 'TERRITORY_STATUS_RESULT':
+        window.dispatchEvent(new CustomEvent('territory-status-result', { detail: payload }));
+        break;
+      case 'TERRITORY_CAPTURE_RESULT':
+        window.dispatchEvent(new CustomEvent('territory-capture-result', { detail: payload }));
+        break;
+      case 'TERRITORY_LIST_RESULT':
+        window.dispatchEvent(new CustomEvent('territory-list-result', { detail: payload }));
+        break;
+      case 'TERRITORY_CAPTURED':
+        window.dispatchEvent(new CustomEvent('territory-captured', { detail: payload }));
+        break;
       case 'PLAYER_COUNT':
         window.dispatchEvent(new CustomEvent('player-count', { detail: payload }));
         break;

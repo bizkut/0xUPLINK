@@ -549,6 +549,19 @@ export const CONTRABAND_ITEMS = [
   { id: 'blackmail_data', name: 'Blackmail Data', basePrice: 8000, rarity: 'rare', desc: 'Leverage on targets' },
 ];
 
+// Territory Control (GreyNet Faction Warfare)
+export const TERRITORY_CONFIG = {
+  zone: 'greynet',              // Only GreyNet networks are capturable
+  captureTime: 300000,          // 5 min to capture uncontested
+  captureTickInterval: 30000,   // Progress tick every 30 seconds
+  influencePerTick: 10,         // Influence gained per tick while capturing
+  maxInfluence: 100,            // Full control at 100 influence
+  contestDecay: 5,              // Influence lost per tick when contested
+  abandonDecay: 2,              // Influence lost per tick when no one present
+  passiveIncome: 10,            // Credits per hour per territory
+  bonusMultiplier: 1.25,        // 25% bonus resources on owned networks
+  maxTerritories: 10,           // Max territories per player
+};
 
 export const DEATH_CONFIG = {
   // When traced (caught)

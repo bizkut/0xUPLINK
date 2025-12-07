@@ -182,7 +182,14 @@
   - Server handlers: DOCK, UNDOCK, HANGAR, STORE, RETRIEVE, SWAP_RIG, SET_HOME
   - Client commands: dock, undock, hangar, store, retrieve, sethome
   - Per-location asset storage (rigs, software, files, resources)
-- [ ] Faction warfare system (GreyNet control)
+- [x] **Faction Warfare (GreyNet Territory Control)** (Completed 2025-12-07)
+  - Added `TERRITORY_CONFIG` to `constants.js` for GreyNet-only territory control
+  - Created `server/territory.js` module with influence-based capture system
+  - Server handlers: TERRITORY_STATUS, TERRITORY_CAPTURE, TERRITORY_LIST
+  - Client commands: territory (view status), capture (start/stop capture)
+  - Influence-based capture: 5 min timer, 10 influence/tick, contest decay
+  - Passive income: 10 CR/hour per territory, 1.25x resource bonus
+  - Max 10 territories per player, GreyNet networks only
 - [x] **Active Defender Counter-Play** (Completed 2025-12-06)
   - Added `COUNTER_PROGRAMS` and `INTRUSION_CONFIG` to `constants.js`
   - Created `defender.js` module with intrusion tracking
