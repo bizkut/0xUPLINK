@@ -156,7 +156,11 @@
   - Shows local files when disconnected, remote when connected
   - Also added rig buy autocomplete
 - [x] Add button shortcuts for common actions
-- [ ] Improve node map visualization for larger networks
+- [x] **Node Map Zoom/Pan** (Completed 2025-12-07)
+  - Mouse wheel zoom (0.5x to 2.0x)
+  - Shift+drag or middle-click to pan
+  - Dynamic node sizing based on node count
+  - Zoom indicator in corner
 - [x] **Cluster/Sector Navigation View** (Completed 2025-12-07)
   - `explore` command shows current cluster networks
   - `explore <sector>` shows clusters in a sector

@@ -7,6 +7,19 @@ export class NodeMap {
     this.currentNode = null;
     this.nodePositions = {};
     this.animationFrame = null;
+
+    // Zoom and pan state
+    this.zoom = 1.0;
+    this.minZoom = 0.5;
+    this.maxZoom = 2.0;
+    this.panX = 0;
+    this.panY = 0;
+    this.isPanning = false;
+    this.lastMouseX = 0;
+    this.lastMouseY = 0;
+
+    // Dynamic sizing
+    this.nodeRadius = 18;
   }
 
   init() {
@@ -17,7 +30,77 @@ export class NodeMap {
     this.resize();
     window.addEventListener('resize', () => this.resize());
 
+    // Zoom with mouse wheel
+    this.canvas.addEventListener('wheel', (e) => this.onWheel(e));
+
+    // Pan with middle-click or shift+drag
+    this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+    document.addEventListener('mousemove', (e) => this.onMouseMove(e));
+    document.addEventListener('mouseup', (e) => this.onMouseUp(e));
+
     this.startAnimation();
+  }
+
+  onWheel(e) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    const newZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom + delta));
+
+    // Zoom towards mouse position
+    const rect = this.canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Adjust pan to keep mouse position stable
+    const zoomRatio = newZoom / this.zoom;
+    this.panX = mouseX - (mouseX - this.panX) * zoomRatio;
+    this.panY = mouseY - (mouseY - this.panY) * zoomRatio;
+
+    this.zoom = newZoom;
+    this.renderNodes();
+  }
+
+  onMouseDown(e) {
+    // Middle click or shift+left click to pan
+    if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+      e.preventDefault();
+      this.isPanning = true;
+      this.lastMouseX = e.clientX;
+      this.lastMouseY = e.clientY;
+      this.canvas.style.cursor = 'grabbing';
+    }
+  }
+
+  onMouseMove(e) {
+    if (!this.isPanning) return;
+
+    const deltaX = e.clientX - this.lastMouseX;
+    const deltaY = e.clientY - this.lastMouseY;
+
+    this.panX += deltaX;
+    this.panY += deltaY;
+
+    this.lastMouseX = e.clientX;
+    this.lastMouseY = e.clientY;
+
+    this.renderNodes();
+  }
+
+  onMouseUp(e) {
+    if (this.isPanning) {
+      this.isPanning = false;
+      this.canvas.style.cursor = 'default';
+    }
+  }
+
+  resetView() {
+    this.zoom = 1.0;
+    this.panX = 0;
+    this.panY = 0;
+    if (this.network) {
+      this.calculatePositions();
+      this.renderNodes();
+    }
   }
 
   resize() {
@@ -118,9 +201,24 @@ export class NodeMap {
     document.getElementById('target-name').textContent =
       `${this.network.owner} @ ${this.network.ip}`;
 
+    // Dynamic node sizing based on node count
+    const nodeCount = this.network.nodes.length;
+    this.nodeRadius = Math.max(12, Math.min(22, 30 - nodeCount * 0.8));
+    const nodeSize = this.nodeRadius * 2 * this.zoom;
+
     this.network.nodes.forEach(node => {
       const pos = this.nodePositions[node.id];
       if (!pos) return;
+
+      // Apply zoom and pan transform
+      const screenX = pos.x * this.zoom + this.panX;
+      const screenY = pos.y * this.zoom + this.panY;
+
+      // Skip if off-screen
+      if (screenX < -50 || screenX > this.canvas.width + 50 ||
+        screenY < -50 || screenY > this.canvas.height + 50) {
+        return;
+      }
 
       const el = document.createElement('div');
       el.className = 'node';
@@ -131,22 +229,41 @@ export class NodeMap {
       else if (node.breached) stateClass = 'breached';
       else if (node.ice) stateClass = 'locked';
 
+      // Scale font size with zoom
+      const fontSize = Math.max(8, Math.round(11 * this.zoom));
+      const iconSize = Math.max(12, Math.round(18 * this.zoom));
+
       el.innerHTML = `
-        <div class="node-icon ${node.shape || 'circle'} ${stateClass}">
-          <span>${node.icon}</span>
+        <div class="node-icon ${node.shape || 'circle'} ${stateClass}" style="width:${nodeSize}px;height:${nodeSize}px;">
+          <span style="font-size:${iconSize}px">${node.icon}</span>
         </div>
-        <div class="node-label">${node.id.split('_')[0]}</div>
+        <div class="node-label" style="font-size:${fontSize}px">${node.id.split('_')[0]}</div>
       `;
 
-      el.style.left = `${pos.x - 30}px`;
-      el.style.top = `${pos.y - 30}px`;
+      el.style.left = `${screenX - nodeSize / 2}px`;
+      el.style.top = `${screenY - nodeSize / 2}px`;
 
       el.addEventListener('click', () => this.onNodeClick(node.id));
 
       this.overlay.appendChild(el);
     });
 
+    // Add zoom indicator
+    this.renderZoomIndicator();
+
     this.render();
+  }
+
+  renderZoomIndicator() {
+    let indicator = document.getElementById('zoom-indicator');
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.id = 'zoom-indicator';
+      indicator.className = 'zoom-indicator';
+      this.overlay.appendChild(indicator);
+    }
+    indicator.textContent = `${Math.round(this.zoom * 100)}%`;
+    indicator.style.opacity = this.zoom !== 1.0 ? '1' : '0.5';
   }
 
   updateNodeStates() {
@@ -184,8 +301,13 @@ export class NodeMap {
 
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
+    // Apply zoom and pan transform to canvas
+    this.ctx.save();
+    this.ctx.translate(this.panX, this.panY);
+    this.ctx.scale(this.zoom, this.zoom);
+
     // Draw connections - EVE style colors
-    this.ctx.lineWidth = 1;
+    this.ctx.lineWidth = 1 / this.zoom; // Maintain visual thickness
 
     this.network.nodes.forEach(node => {
       const pos = this.nodePositions[node.id];
@@ -217,6 +339,8 @@ export class NodeMap {
 
     // Draw data flow animation on breached paths
     this.drawDataFlow();
+
+    this.ctx.restore();
   }
 
   drawDevices() {
@@ -226,7 +350,7 @@ export class NodeMap {
       const pos = this.nodePositions[node.id];
       if (!pos) return;
 
-      const radius = 18;
+      const radius = this.nodeRadius;
 
       // Determine colors based on state
       let fillColor = 'rgba(20, 25, 35, 0.9)';
@@ -246,7 +370,7 @@ export class NodeMap {
       // Draw based on node shape
       this.ctx.fillStyle = fillColor;
       this.ctx.strokeStyle = strokeColor;
-      this.ctx.lineWidth = 2;
+      this.ctx.lineWidth = 2 / this.zoom; // Maintain visual thickness
 
       switch (node.shape) {
         case 'square':

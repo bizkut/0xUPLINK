@@ -105,6 +105,17 @@ Game audio feedback using Web Audio API:
 
 ---
 
+## 🗺️ Network Map
+
+Interactive node visualization with:
+- **Mouse wheel zoom** (0.5x to 2.0x)
+- **Shift+drag to pan** (or middle-click)
+- **Dynamic node sizing** - smaller nodes for larger networks
+- **Zoom indicator** showing current zoom level
+- Click nodes to move to them
+
+---
+
 ## ⌨️ Command Reference
 
 ### Navigation

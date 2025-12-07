@@ -1025,3 +1025,28 @@
   color: var(--text-dim);
   border-color: var(--text-dim);
 }
+
+/* Node Map Zoom Indicator */
+.zoom-indicator {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(20, 25, 35, 0.9);
+  border: 1px solid var(--border-color);
+  color: var(--text-dim);
+  padding: 4px 8px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  border-radius: 2px;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* Node map pan cursor */
+#node-map {
+  cursor: default;
+}
+
+#node-map:active {
+  cursor: grabbing;
+}
