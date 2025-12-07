@@ -1291,36 +1291,134 @@ class App {
 
   async cmdExplore(args) {
     if (args.length > 0) {
-      // Explore specific sector
-      const sectorName = args.join('_').toLowerCase();
-      this.terminal.print(`Exploring sector: ${sectorName}...`, 'system');
-      // TODO: Send EXPLORE message to server
-      this.terminal.print('Sector exploration coming soon.', 'warning');
+      const target = args.join('_').toLowerCase();
+
+      // Check if it's a sector name
+      const sectorKey = target.toUpperCase().replace(/ /g, '_');
+      this.terminal.print(`Exploring: ${target}...`, 'system');
+
+      const result = await this.game.sendMessage('EXPLORE', {
+        sectorId: sectorKey,
+        clusterId: target
+      });
+
+      if (result.error) {
+        this.terminal.print(`Error: ${result.error}`, 'error');
+        return;
+      }
+
+      if (result.type === 'sector') {
+        // Display sector clusters
+        this.terminal.print(`=== SECTOR: ${result.sector.name} ===`, 'info');
+        this.terminal.print(`Zone: ${result.sector.zone} | Security: ${result.sector.securityRange[0].toFixed(1)}-${result.sector.securityRange[1].toFixed(1)}`, 'system');
+        this.terminal.print(`${result.sector.description}`, 'dim');
+        this.terminal.print('');
+        this.terminal.print(`CLUSTERS (${result.sector.clusters.length}):`, 'info');
+
+        for (const cluster of result.sector.clusters) {
+          this.terminal.print(`  📦 ${cluster.id} (${cluster.networkCount} networks)`, 'system');
+        }
+        this.terminal.print('');
+        this.terminal.print('Use "explore <cluster_id>" to view networks.', 'system');
+      } else if (result.type === 'cluster' && result.networks) {
+        // Display cluster networks
+        this.terminal.print(`=== CLUSTER: ${result.clusterId} ===`, 'info');
+        this.terminal.print(`Networks: ${result.networks.length}`, 'system');
+        this.terminal.print('');
+
+        for (const net of result.networks) {
+          const current = net.isCurrent ? ' ← YOU ARE HERE' : '';
+          const zoneColor = net.zone === 'clearnet' ? 'blue' : net.zone === 'greynet' ? 'warning' : 'danger';
+          this.terminal.print(`  🌐 ${net.ip.padEnd(18)} ${net.owner.padEnd(20)} [${net.zoneName}]${current}`, zoneColor);
+        }
+        this.terminal.print('');
+        this.terminal.print('Use "navigate <ip>" to move to a network.', 'system');
+      }
       return;
     }
 
-    // Explore current cluster
-    this.terminal.print('=== CLUSTER NETWORKS ===', 'info');
-    this.terminal.print(`Cluster: ${this.location?.clusterId || 'Unknown'}`, 'system');
+    // Explore current cluster (no args)
+    this.terminal.print('=== CURRENT CLUSTER ===', 'info');
+    this.terminal.print(`Location: ${this.location?.clusterId || 'Unknown'}`, 'system');
     this.terminal.print('');
 
-    // For now, show placeholder - this would come from server
-    this.terminal.print('Network exploration requires server connection.', 'warning');
-    this.terminal.print('Use "navigate <network_id>" to move between networks.', 'system');
+    const result = await this.game.sendMessage('EXPLORE', {});
+
+    if (result.error) {
+      this.terminal.print(`Error: ${result.error}`, 'error');
+      return;
+    }
+
+    if (result.networks && result.networks.length > 0) {
+      this.terminal.print(`NEARBY NETWORKS (${result.networks.length}):`, 'info');
+      for (const net of result.networks) {
+        const current = net.isCurrent ? ' ← YOU ARE HERE' : '';
+        const zoneColor = net.zone === 'clearnet' ? 'blue' : net.zone === 'greynet' ? 'warning' : 'danger';
+        const secStr = net.security >= 0 ? `+${net.security.toFixed(1)}` : net.security.toFixed(1);
+        this.terminal.print(`  ${net.ip.padEnd(18)} ${net.owner.substring(0, 18).padEnd(18)} ${secStr.padEnd(5)} [${net.zoneName}]${current}`, zoneColor);
+      }
+      this.terminal.print('');
+      this.terminal.print('Use "navigate <ip>" to move to a network.', 'system');
+      this.terminal.print('Use "sectors" to see all sectors.', 'system');
+    } else {
+      this.terminal.print('No networks found in current cluster.', 'warning');
+    }
   }
 
   async cmdNavigate(args) {
     if (args.length === 0) {
-      this.terminal.print('Usage: navigate <network_id>', 'error');
+      this.terminal.print('Usage: navigate <ip_address>', 'error');
+      this.terminal.print('Use "explore" to see available networks in this cluster.', 'system');
+      return;
+    }
+
+    const targetIp = args[0];
+    this.terminal.print(`Plotting route to ${targetIp}...`, 'system');
+
+    // Find network ID by IP
+    const result = await this.game.sendMessage('EXPLORE', {});
+    if (result.error) {
+      this.terminal.print(`Error: ${result.error}`, 'error');
+      return;
+    }
+
+    // Find the network with this IP
+    const targetNetwork = result.networks?.find(n => n.ip.startsWith(targetIp.replace('/24', '')));
+    if (!targetNetwork) {
+      this.terminal.print(`Network ${targetIp} not found in current cluster.`, 'error');
       this.terminal.print('Use "explore" to see available networks.', 'system');
       return;
     }
 
-    const targetId = args[0];
-    this.terminal.print(`Plotting route to ${targetId}...`, 'system');
+    // Navigate to the network
+    const navResult = await this.game.sendMessage('NAVIGATE', { targetNetworkId: targetNetwork.id });
 
-    // TODO: Send NAVIGATE message to server
-    this.terminal.print('Network navigation requires server connection.', 'warning');
+    if (navResult.error) {
+      this.terminal.print(`Navigation failed: ${navResult.error}`, 'error');
+      return;
+    }
+
+    if (navResult.success) {
+      this.terminal.print('');
+      this.terminal.print(`✓ Navigation complete`, 'success');
+      this.terminal.print(`  Route: ${navResult.jumps} hop(s)`, 'system');
+      this.terminal.print('');
+
+      const net = navResult.currentNetwork;
+      const zoneColor = net.zone === 'clearnet' ? 'blue' : net.zone === 'greynet' ? 'warning' : 'danger';
+      this.terminal.print(`=== ARRIVED: ${net.owner} ===`, zoneColor);
+      this.terminal.print(`  IP: ${net.ip}`, 'system');
+      this.terminal.print(`  Zone: ${net.zoneName}`, zoneColor);
+      this.terminal.print(`  Security: ${net.security >= 0 ? '+' : ''}${net.security.toFixed(1)}`, 'system');
+      this.terminal.print(`  Connections: ${net.connections.length} networks`, 'system');
+
+      // Update local location state
+      this.location = navResult.location;
+      this.updateLocationUI();
+
+      this.terminal.print('');
+      this.terminal.print('Use "scan <ip>" to probe this network.', 'system');
+    }
   }
 
   cmdResources() {

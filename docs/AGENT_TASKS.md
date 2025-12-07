@@ -157,7 +157,11 @@
   - Also added rig buy autocomplete
 - [x] Add button shortcuts for common actions
 - [ ] Improve node map visualization for larger networks
-- [ ] Add cluster/sector navigation view
+- [x] **Cluster/Sector Navigation View** (Completed 2025-12-07)
+  - `explore` command shows current cluster networks
+  - `explore <sector>` shows clusters in a sector
+  - `navigate <ip>` moves between networks
+  - Full 901-network universe now explorable
 - [ ] Sound effects for alerts, hack success/fail
 
 ### Gameplay

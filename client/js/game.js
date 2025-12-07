@@ -227,6 +227,12 @@ export class Game {
       case 'TERRITORY_CAPTURED':
         window.dispatchEvent(new CustomEvent('territory-captured', { detail: payload }));
         break;
+      case 'EXPLORE_RESULT':
+        window.dispatchEvent(new CustomEvent('explore-result', { detail: payload }));
+        break;
+      case 'NAVIGATE_RESULT':
+        window.dispatchEvent(new CustomEvent('navigate-result', { detail: payload }));
+        break;
       case 'PLAYER_COUNT':
         window.dispatchEvent(new CustomEvent('player-count', { detail: payload }));
         break;
