@@ -162,7 +162,11 @@
   - `explore <sector>` shows clusters in a sector
   - `navigate <ip>` moves between networks
   - Full 901-network universe now explorable
-- [ ] Sound effects for alerts, hack success/fail
+- [x] **Sound Effects System** (Completed 2025-12-07)
+  - Web Audio API synth sounds (no external audio files)
+  - 15 sound effects: hack success/fail, connect/disconnect, download, alerts, UI feedback
+  - Volume toggle button in header (🔊/🔇)
+  - Mute state persisted to localStorage
 
 ### Gameplay
 - [x] **Graded Heat System** (Completed 2025-12-06)

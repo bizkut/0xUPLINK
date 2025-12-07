@@ -5,13 +5,14 @@
  * toast notifications for important updates.
  */
 
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { REALTIME_CHANNELS, REALTIME_EVENTS } from '../../shared/constants.js';
+import { audio } from './audio.js';
 
 let supabase = null;
 let globalChannel = null;
 let territoryChannel = null;
 let marketChannel = null;
+let initializationAttempted = false;
 
 // Event handlers
 let onGhostSpawn = null;
@@ -26,13 +27,26 @@ let onIntrusionAlert = null;
  * @param {string} supabaseUrl - Supabase project URL
  * @param {string} supabaseKey - Supabase anon key
  */
-export function initRealtimeClient(supabaseUrl, supabaseKey) {
+export async function initRealtimeClient(supabaseUrl, supabaseKey) {
+    if (initializationAttempted) {
+        return supabase !== null;
+    }
+    initializationAttempted = true;
+
     if (!supabaseUrl || !supabaseKey) {
         console.warn('[Realtime] Supabase not configured - notifications disabled');
         return false;
     }
 
     try {
+        // Dynamic import to prevent blocking errors
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+
+        if (!createClient) {
+            console.warn('[Realtime] Failed to load Supabase client');
+            return false;
+        }
+
         supabase = createClient(supabaseUrl, supabaseKey);
 
         // Subscribe to global channel
@@ -74,7 +88,7 @@ export function initRealtimeClient(supabaseUrl, supabaseKey) {
         console.log('[Realtime] Client initialized');
         return true;
     } catch (error) {
-        console.error('[Realtime] Initialization failed:', error);
+        console.warn('[Realtime] Initialization failed (non-critical):', error.message);
         return false;
     }
 }
@@ -159,6 +173,15 @@ function createToastContainer() {
  */
 export function showToast(message, type = 'info', duration = 5000) {
     createToastContainer();
+
+    // Play appropriate sound based on toast type
+    if (type === 'alert' || type === 'error') {
+        audio.play('alert');
+    } else if (type === 'ghost') {
+        audio.play('ghost_spawn');
+    } else {
+        audio.play('notification');
+    }
 
     const toast = document.createElement('div');
     toast.className = `realtime-toast realtime-toast-${type}`;

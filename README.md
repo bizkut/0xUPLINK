@@ -1,9 +1,9 @@
 # 0xUPLINK // Netrunner MMO
 
-> **Status**: Alpha v1.0  
-> **Latest**: Black Market (DarkNet contraband), Contract Marketplace, Dynamic NPC Trading
+> **Status**: Alpha v1.1  
+> **Latest**: Sound Effects System, Supabase Realtime Broadcasts, GreyNet Territory Control
 
-A cyberpunk hacking MMO inspired by *Uplink*, *Mr. Robot*, and *EVE Online*. Hack servers, steal data, harvest resources, dock at Safe Houses, customize your rig, trade on the market, and claim sovereignty over the DarkNet in a persistent, player-driven world.
+A cyberpunk hacking MMO inspired by *Uplink*, *Mr. Robot*, and *EVE Online*. Hack servers, steal data, harvest resources, dock at Safe Houses, customize your rig, trade on the market, capture territory, and claim sovereignty over the DarkNet in a persistent, player-driven world.
 
 ## 🚀 Quick Start
 
@@ -79,6 +79,29 @@ Temporary high-value networks that appear randomly (like EVE wormholes):
 | **GreyNet** | Medium (0.0-0.5) | Medium - PvP allowed | 1.5x |
 | **DarkNet** | Low (-1.0-0.0) | High - Lawless | 2x |
 | **Ghost** | Extreme | Very High | 5x |
+
+---
+
+## 🏴 Territory Control (GreyNet)
+
+Capture and hold GreyNet networks to earn passive income:
+- `territory` - View current network control status
+- `capture` - Start/stop capturing a network
+- **5 minute capture timer** with influence-based control
+- **10 CR/hour** passive income per controlled territory
+- **1.25x resource bonus** when harvesting in your territory
+- Max 10 territories per player
+
+---
+
+## 🔊 Sound Effects
+
+Game audio feedback using Web Audio API:
+- **Hack success/fail** sounds for ICE breaching
+- **Connect/disconnect** sounds for server connections
+- **Download/credits** sounds for file operations
+- **Alert/notification** sounds for toasts and warnings
+- **Volume toggle** (🔊/🔇) in header - mute state persists
 
 ---
 

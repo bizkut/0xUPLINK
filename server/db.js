@@ -19,17 +19,33 @@ if (!supabase) {
 export async function registerUser(username, password) {
     if (!supabase) return { error: 'Database not configured' };
 
-    // Use custom RPC to bypass Captcha/Rate limits and ensure atomic creation
-    const { data, error } = await supabase.rpc('register_player', {
-        username,
-        password
+    const email = `${username.toLowerCase()}@uplink.net`;
+
+    // Use Supabase Auth for registration (matches login system)
+    const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+            data: { username } // Store username in user metadata
+        }
     });
 
     if (error) return { error: error.message };
-    if (data.error) return { error: data.error };
+    if (!data.user) return { error: 'Registration failed' };
 
-    // Data contains { success, user_id }
-    return { user: { id: data.user_id } };
+    // Initialize player stats record
+    const { error: statsError } = await supabase.rpc('init_player_stats', {
+        p_id: data.user.id,
+        p_username: username,
+        p_ip: generateIP()
+    });
+
+    if (statsError) {
+        console.error('Failed to initialize player stats:', statsError);
+        // Don't fail registration if stats init fails - can be retried on login
+    }
+
+    return { user: data.user };
 }
 
 export async function loginUser(username, password) {
@@ -56,6 +72,7 @@ export async function savePlayerState(playerId, state) {
     // 1. Save Stats & Resources
     const { error: statsError } = await supabase.rpc('save_player_state', {
         p_id: playerId,
+        p_ip: state.ip || generateIP(), // Pass player IP, generate fallback if missing
         p_reputation: state.reputation,
         p_heat: state.heat,
         p_rig_class: state.rig?.class?.id || 'burner', // Use fallback if missing
@@ -102,9 +119,9 @@ export async function loadPlayerState(playerId) {
     }
 
     // Data structure: { stats, items: [], files: [] }
-    const { stats, items, files } = data;
+    if (!data) return null;
 
-    if (!stats) return null;
+    const { stats, items, files } = data;
 
     // Reconstruct resources
     const resources = {

@@ -3062,8 +3062,14 @@ async function handleLogin(player, { username, password }) {
   player.rigIntegrity = savedState.stats.rig_integrity;
 
   // Restore Rig
-  const rigClassId = savedState.stats.current_rig_class;
-  const rigClass = getRigById(rigClassId);
+  const rigClassId = savedState.stats.current_rig_class || 'burner';
+  let rigClass = getRigById(rigClassId);
+
+  // Fallback to burner if rig not found
+  if (!rigClass) {
+    console.warn(`[LOGIN] Rig class "${rigClassId}" not found, using burner`);
+    rigClass = getRigById('burner');
+  }
 
   // Re-calculate hardware
   // We need a helper for this ideally, but let's inline for MVP

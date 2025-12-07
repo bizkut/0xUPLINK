@@ -986,3 +986,42 @@
   background: rgba(102, 153, 204, 0.15);
   border-color: var(--accent-blue);
 }
+
+/* Logout Button */
+.logout-btn {
+  background: transparent;
+  border: 1px solid var(--accent-red);
+  color: var(--accent-red);
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-radius: 2px;
+}
+
+.logout-btn:hover {
+  background: rgba(204, 68, 68, 0.2);
+  box-shadow: var(--glow-red);
+}
+
+/* Volume Toggle Button */
+.volume-btn {
+  background: transparent;
+  border: 1px solid var(--accent-blue);
+  color: var(--accent-blue);
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-radius: 2px;
+}
+
+.volume-btn:hover {
+  background: rgba(102, 153, 204, 0.2);
+  box-shadow: var(--glow-blue);
+}
+
+.volume-btn.muted {
+  color: var(--text-dim);
+  border-color: var(--text-dim);
+}

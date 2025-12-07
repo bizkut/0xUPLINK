@@ -6,6 +6,7 @@ import { MarketUI } from './market.js';
 import { ContractUI } from './contracts.js';
 import { SECTORS, SECURITY_ZONES, SOVEREIGNTY_STRUCTURES, HEAT_THRESHOLDS } from '../../shared/constants.js';
 import { initRealtimeClient, showToast } from './realtime.js';
+import { audio } from './audio.js';
 
 class App {
   constructor() {
@@ -32,6 +33,10 @@ class App {
     this.ui.init();
     this.terminal.init(this.handleCommand.bind(this), this.getFilesSuggestions.bind(this));
     this.nodeMap.init();
+
+    // Initialize audio on first user interaction (browser autoplay policy)
+    document.addEventListener('click', () => audio.init(), { once: true });
+    document.addEventListener('keydown', () => audio.init(), { once: true });
 
     // Connect to server
     await this.game.connect();
@@ -439,8 +444,14 @@ class App {
         await this.cmdCapture(args);
         break;
       default:
+        audio.play('error');
         this.terminal.print(`Unknown command: ${cmd}`, 'error');
         this.terminal.print('Type "help" for available commands.', 'system');
+    }
+
+    // Play command sound for valid commands
+    if (cmd !== '' && !['default'].includes(cmd)) {
+      audio.play('command');
     }
   }
 
@@ -634,10 +645,12 @@ class App {
     const result = await this.game.connectToTarget(ip);
 
     if (result.error) {
+      audio.play('error');
       this.terminal.print(result.error, 'error');
       return;
     }
 
+    audio.play('connect');
     this.terminal.print('Connection established.', 'success');
     this.terminal.print(`Entered via: ${result.entryNode}`, 'system');
     this.terminal.print('TRACE INITIATED - Work fast.', 'warning');
@@ -657,6 +670,7 @@ class App {
     }
 
     const result = this.game.disconnect(false);
+    audio.play('disconnect');
     this.terminal.print('Disconnecting...', 'system');
 
     if (result.logsCleaned) {
@@ -739,11 +753,14 @@ class App {
     }
 
     if (result.success) {
+      audio.play('hack_success');
       this.terminal.print('ICE breached successfully!', 'success');
       this.nodeMap.updateNode(currentNode.id, { breached: true });
     } else {
+      audio.play('hack_fail');
       this.terminal.print('Breach failed. ICE too strong.', 'error');
       if (result.damage) {
+        audio.play('damage');
         this.terminal.print(`Hardware damage taken: ${result.damage}`, 'error');
       }
     }
@@ -851,12 +868,15 @@ class App {
     const result = await this.game.downloadFile(filename);
 
     if (result.error) {
+      audio.play('error');
       this.terminal.print(result.error, 'error');
       return;
     }
 
+    audio.play('download');
     this.terminal.print(`Downloaded: ${filename} (${this.formatSize(file.size)})`, 'success');
     if (result.credits) {
+      audio.play('credits');
       this.terminal.print(`Value: ${result.credits} CR`, 'success');
     }
 
@@ -1201,6 +1221,43 @@ class App {
         this.terminal.executeCommand(cmd);
       });
     });
+
+    // Logout button handler
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        // Clear any stored session data
+        localStorage.removeItem('uplink_session');
+        localStorage.removeItem('uplink_player');
+        sessionStorage.clear();
+
+        // Disconnect from server
+        if (this.game && this.game.ws) {
+          this.game.ws.close();
+        }
+
+        // Reload page to show login screen
+        window.location.reload();
+      });
+    }
+
+    // Volume toggle button handler
+    const volumeBtn = document.getElementById('volume-btn');
+    if (volumeBtn) {
+      // Set initial state
+      if (audio.isMuted()) {
+        volumeBtn.textContent = '🔇';
+        volumeBtn.classList.add('muted');
+      }
+
+      volumeBtn.addEventListener('click', () => {
+        audio.init(); // Ensure audio is initialized
+        const muted = audio.toggleMute();
+        volumeBtn.textContent = muted ? '🔇' : '🔊';
+        volumeBtn.classList.toggle('muted', muted);
+        audio.play('click'); // Play feedback if unmuting
+      });
+    }
   }
 
   setupHotkeys() {
